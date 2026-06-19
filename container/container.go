@@ -161,6 +161,15 @@ func Resolve[T any](ctx context.Context, c *Container) (T, error) {
 	if perr != nil {
 		return zero, fmt.Errorf("container: resolving %s: %w", key, perr)
 	}
+	// A provider may legitimately return (nil, nil) for an interface type T
+	// to signal "this optional dependency is not configured". The any
+	// returned from resolve is then a nil any (no dynamic type, no value),
+	// and v.(T) on a nil any reports !ok regardless of T. Short-circuit so
+	// nil interface registrations resolve to the zero value of T without a
+	// spurious type-assertion error.
+	if v == nil {
+		return zero, nil
+	}
 	out, ok := v.(T)
 	if !ok {
 		return zero, fmt.Errorf("container: stored value for %s is not %s", key, key)
