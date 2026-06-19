@@ -13,6 +13,13 @@ import (
 // fakeLogger is a stand-in for a logger to exercise pointer-typed singletons.
 type fakeLogger struct{ name string }
 
+// optionalFetcher is a stand-in for a service's "optional dependency"
+// interface — e.g. a permissions fetcher that resolves to nil when its
+// upstream URL is unconfigured.
+type optionalFetcher interface {
+	Fetch() string
+}
+
 // fakeRepo depends on a logger; exercises the dep-graph case.
 type fakeRepo struct{ log *fakeLogger }
 
@@ -243,5 +250,59 @@ func TestResolve_ConcurrentCallsRunProviderExactlyOnce(t *testing.T) {
 		if r != first {
 			t.Fatalf("singleton broken under contention: %p != %p", r, first)
 		}
+	}
+}
+
+// TestResolve_NilInterfaceRegistration covers the legitimate "not
+// configured" pattern: a provider returns (nil, nil) for an interface
+// type to indicate that the optional dependency is absent. Resolve must
+// return a nil interface — not panic on a failed type assertion against
+// the empty any.
+func TestResolve_NilInterfaceRegistration(t *testing.T) {
+	t.Parallel()
+
+	c := container.New()
+	container.Register(c, func(context.Context, *container.Container) (optionalFetcher, error) {
+		return nil, nil
+	})
+
+	ctx := context.Background()
+	if err := c.Bootstrap(ctx); err != nil {
+		t.Fatalf("Bootstrap: %v", err)
+	}
+
+	got, err := container.Resolve[optionalFetcher](ctx, c)
+	if err != nil {
+		t.Fatalf("Resolve: %v", err)
+	}
+	if got != nil {
+		t.Fatalf("expected nil interface, got %#v", got)
+	}
+}
+
+// TestMustResolve_NilInterfaceRegistration mirrors the above via
+// MustResolve to confirm the panic-on-error variant also tolerates nil
+// interface registrations.
+func TestMustResolve_NilInterfaceRegistration(t *testing.T) {
+	t.Parallel()
+
+	c := container.New()
+	container.Register(c, func(context.Context, *container.Container) (optionalFetcher, error) {
+		return nil, nil
+	})
+
+	ctx := context.Background()
+	if err := c.Bootstrap(ctx); err != nil {
+		t.Fatalf("Bootstrap: %v", err)
+	}
+
+	defer func() {
+		if r := recover(); r != nil {
+			t.Fatalf("MustResolve panicked on nil interface registration: %v", r)
+		}
+	}()
+	got := container.MustResolve[optionalFetcher](ctx, c)
+	if got != nil {
+		t.Fatalf("expected nil interface, got %#v", got)
 	}
 }
