@@ -76,7 +76,7 @@ func TestBootstrap_HonorsCancelledContext(t *testing.T) {
 
 	err := c.Bootstrap(ctx)
 	if err == nil {
-		t.Fatal("expected error from cancelled Bootstrap, got nil")
+		t.Fatal("expected error from canceled Bootstrap, got nil")
 	}
 	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("expected context.Canceled in chain, got %v", err)
@@ -224,7 +224,7 @@ func TestClose_CancelledContextShortCircuits(t *testing.T) {
 		t.Fatalf("expected context.Canceled, got %v", err)
 	}
 	if got := atomic.LoadInt32(&ran); got != 0 {
-		t.Fatalf("closer ran despite cancelled ctx: ran=%d", got)
+		t.Fatalf("closer ran despite canceled ctx: ran=%d", got)
 	}
 }
 

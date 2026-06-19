@@ -195,7 +195,7 @@ func findEntry(c *Container, key reflect.Type) entry {
 // Bootstrap eagerly resolves every non-lazy registration on this container.
 // It does NOT descend into parents; bootstrap your root container, then any
 // child scopes that need pre-warming. Returns the first provider error, or
-// the context error if ctx is cancelled mid-bootstrap.
+// the context error if ctx is canceled mid-bootstrap.
 func (c *Container) Bootstrap(ctx context.Context) error {
 	c.mu.RLock()
 	eagerEntries := make([]entry, 0, len(c.services))
@@ -240,7 +240,7 @@ func (c *Container) OnClose(name string, fn func(ctx context.Context) error) {
 }
 
 // Close runs every registered closer in reverse registration order. If ctx
-// is cancelled before a closer runs, the remaining closers are skipped and
+// is canceled before a closer runs, the remaining closers are skipped and
 // the cancellation error is included in the joined return value.
 //
 // Errors from individual closers are joined via [errors.Join]; the caller can
@@ -257,7 +257,7 @@ func (c *Container) Close(ctx context.Context) error {
 	var errs []error
 	for i := len(closers) - 1; i >= 0; i-- {
 		if err := ctx.Err(); err != nil {
-			errs = append(errs, fmt.Errorf("container: close cancelled before %s: %w", closers[i].name, err))
+			errs = append(errs, fmt.Errorf("container: close canceled before %s: %w", closers[i].name, err))
 			break
 		}
 		if err := closers[i].fn(ctx); err != nil {
