@@ -51,7 +51,12 @@ type Container struct {
 
 	mu       sync.RWMutex
 	services map[reflect.Type]entry
-	closers  []closerEntry
+	// order records the keys in services in the order they were registered.
+	// Bootstrap iterates this slice instead of the map so eager providers
+	// run deterministically and a failing upstream surfaces before any
+	// downstream that depends on it gets a chance to call MustResolve.
+	order   []reflect.Type
+	closers []closerEntry
 
 	readyOnce sync.Once
 	ready     chan struct{}
@@ -112,6 +117,7 @@ func register[T any](c *Container, provider Provider[T], eager bool) {
 		panic(fmt.Sprintf("container: %s already registered", key))
 	}
 	c.services[key] = &typedEntry[T]{provider: provider, isEager: eager}
+	c.order = append(c.order, key)
 }
 
 // OverrideValue replaces (or creates) the registration for T with a fixed
@@ -216,10 +222,15 @@ func findEntry(c *Container, key reflect.Type) entry {
 // child scopes that need pre-warming. Returns the first provider error, or
 // the context error if ctx is canceled mid-bootstrap.
 func (c *Container) Bootstrap(ctx context.Context) error {
+	// Iterate in insertion order, not map order, so a provider whose
+	// downstream uses MustResolve cannot get scheduled before the upstream
+	// it implicitly depends on. The upstream's error then surfaces from
+	// Bootstrap directly instead of escaping as a panic through MustResolve.
 	c.mu.RLock()
-	eagerEntries := make([]entry, 0, len(c.services))
-	eagerKeys := make([]reflect.Type, 0, len(c.services))
-	for k, e := range c.services {
+	eagerEntries := make([]entry, 0, len(c.order))
+	eagerKeys := make([]reflect.Type, 0, len(c.order))
+	for _, k := range c.order {
+		e := c.services[k]
 		if e.eager() {
 			eagerKeys = append(eagerKeys, k)
 			eagerEntries = append(eagerEntries, e)

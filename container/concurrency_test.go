@@ -10,6 +10,94 @@ import (
 	"github.com/jedi-knights/go-platform/container"
 )
 
+// TestBootstrap_RunsProvidersInInsertionOrder guards against the latent
+// non-determinism bug where Bootstrap iterated the services map directly.
+// When a downstream provider used MustResolve to fetch a still-unresolved
+// upstream whose provider would error, the random iteration could schedule
+// the downstream first; MustResolve then panicked instead of letting
+// Bootstrap surface the upstream error cleanly. Iterating in insertion
+// order eliminates that hazard — the upstream is always resolved before
+// any downstream that depends on it.
+func TestBootstrap_RunsProvidersInInsertionOrder(t *testing.T) {
+	t.Parallel()
+
+	type a struct{}
+	type b struct{}
+	type cType struct{}
+	type d struct{}
+	type e struct{}
+
+	var order []string
+	c := container.New()
+	container.Register(c, func(context.Context, *container.Container) (*a, error) {
+		order = append(order, "a")
+		return &a{}, nil
+	})
+	container.Register(c, func(context.Context, *container.Container) (*b, error) {
+		order = append(order, "b")
+		return &b{}, nil
+	})
+	container.Register(c, func(context.Context, *container.Container) (*cType, error) {
+		order = append(order, "c")
+		return &cType{}, nil
+	})
+	container.Register(c, func(context.Context, *container.Container) (*d, error) {
+		order = append(order, "d")
+		return &d{}, nil
+	})
+	container.Register(c, func(context.Context, *container.Container) (*e, error) {
+		order = append(order, "e")
+		return &e{}, nil
+	})
+
+	if err := c.Bootstrap(context.Background()); err != nil {
+		t.Fatalf("Bootstrap: %v", err)
+	}
+	want := []string{"a", "b", "c", "d", "e"}
+	if len(order) != len(want) {
+		t.Fatalf("order length = %d, want %d", len(order), len(want))
+	}
+	for i := range want {
+		if order[i] != want[i] {
+			t.Fatalf("Bootstrap order = %v, want %v", order, want)
+		}
+	}
+}
+
+// TestBootstrap_UpstreamErrorBeatsDownstreamMustResolve documents the
+// concrete failure mode that motivated insertion-order Bootstrap. A
+// downstream provider that calls MustResolve on a failing upstream would
+// panic under random ordering; under insertion order the upstream's error
+// surfaces from Bootstrap before the downstream runs at all.
+func TestBootstrap_UpstreamErrorBeatsDownstreamMustResolve(t *testing.T) {
+	t.Parallel()
+
+	type upstream struct{}
+	type downstream struct{}
+
+	wantErr := errors.New("upstream boom")
+
+	c := container.New()
+	container.Register(c, func(context.Context, *container.Container) (*upstream, error) {
+		return nil, wantErr
+	})
+	container.Register(c, func(ctx context.Context, c *container.Container) (*downstream, error) {
+		// Would panic under random ordering if Bootstrap scheduled this
+		// before the upstream and the upstream's provider failed during
+		// the implicit resolve here.
+		_ = container.MustResolve[*upstream](ctx, c)
+		return &downstream{}, nil
+	})
+
+	err := c.Bootstrap(context.Background())
+	if err == nil {
+		t.Fatal("expected upstream error from Bootstrap, got nil")
+	}
+	if !errors.Is(err, wantErr) {
+		t.Fatalf("Bootstrap error chain missing upstream cause: got %v", err)
+	}
+}
+
 func TestBootstrap_RunsAllEagerProviders(t *testing.T) {
 	t.Parallel()
 
