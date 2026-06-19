@@ -161,12 +161,22 @@ func Resolve[T any](ctx context.Context, c *Container) (T, error) {
 	if perr != nil {
 		return zero, fmt.Errorf("container: resolving %s: %w", key, perr)
 	}
-	// A provider may legitimately return (nil, nil) for an interface type T
-	// to signal "this optional dependency is not configured". The any
-	// returned from resolve is then a nil any (no dynamic type, no value),
-	// and v.(T) on a nil any reports !ok regardless of T. Short-circuit so
-	// nil interface registrations resolve to the zero value of T without a
-	// spurious type-assertion error.
+	return assertResolved[T](v, key)
+}
+
+// assertResolved converts the boxed any returned by typedEntry.resolve into a
+// typed T. Extracted from Resolve to keep its cyclomatic complexity within
+// the project linter's cap, and to give the nil-interface escape hatch a
+// single named home.
+//
+// A provider may legitimately return (nil, nil) for an interface type T to
+// signal "this optional dependency is not configured". The any returned
+// from resolve is then a nil any (no dynamic type, no value), and v.(T) on
+// a nil any reports !ok regardless of T. Short-circuit so nil interface
+// registrations resolve to the zero value of T without a spurious
+// type-assertion error.
+func assertResolved[T any](v any, key reflect.Type) (T, error) {
+	var zero T
 	if v == nil {
 		return zero, nil
 	}
