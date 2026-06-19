@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/jedi-knights/go-logging/pkg/logging"
+
 	"github.com/jedi-knights/go-platform/httputil"
 )
 

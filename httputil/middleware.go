@@ -21,7 +21,7 @@ const traceIDHeader = "X-Trace-ID"
 var uuidPattern = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`)
 
 // newTraceID returns a fresh trace ID via [logging.NewTraceID]. It panics
-// when the underlying crypto/rand call fails (signalled by an empty return),
+// when the underlying crypto/rand call fails (signaled by an empty return),
 // because a broken CSPRNG makes secure trace IDs impossible and silently
 // emitting a degraded value would mask the failure.
 func newTraceID() string {

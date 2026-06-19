@@ -53,7 +53,7 @@ var appErrorHTTPStatus = map[apperrors.ErrorCode]int{
 
 // HTTPStatus maps an [apperrors.AppError] code to an HTTP status code.
 // It panics when err is nil — nil signals success and must never be passed
-// here. Non-AppError, non-nil values and unrecognised codes return 500.
+// here. Non-AppError, non-nil values and unrecognized codes return 500.
 func HTTPStatus(err error) int {
 	if err == nil {
 		panic("httputil.HTTPStatus called with nil — nil is success, not an error")
