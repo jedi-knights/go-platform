@@ -125,7 +125,7 @@ func TestWrap_FmtWrappedTypedNilCause(t *testing.T) {
 	err := apperrors.Wrap(apperrors.ErrCodeInternal, "op", fmtWrapped)
 	// The fmt-wrapped value is non-nil; Wrap stores it as-is.
 	if err.Unwrap() == nil {
-		t.Fatal("fmt-wrapped typed nil should be stored as a non-nil cause — behaviour changed, update doc comment")
+		t.Fatal("fmt-wrapped typed nil should be stored as a non-nil cause — behavior changed, update doc comment")
 	}
 	// The Error() string includes the fmt wrapper, not a bare "<nil AppError>".
 	want := "INTERNAL: op: ctx: <nil AppError>"
