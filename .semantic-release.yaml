@@ -16,6 +16,15 @@
 release_mode: repo
 tag_format: "v{{.Version}}"
 
+# go-semantic-release does not auto-detect the GitHub repository from the
+# git remote — it reads owner/repo from this config. Without them, the
+# create-release POST hits https://api.github.com/repos///releases and
+# fails with 404 (the tag is still created locally, but the release page
+# is not).
+github:
+  owner: jedi-knights
+  repo: go-platform
+
 branches:
   - name: main
     is_default: true
