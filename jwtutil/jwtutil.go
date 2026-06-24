@@ -1,7 +1,13 @@
-// Package jwtutil provides HS256 JWT signing and parsing.
+// Package jwtutil provides JWT signing and parsing for the identity platform.
 //
-// It encapsulates the HMAC key-function boilerplate and exposes the canonical
-// Claims type so callers share one definition. Parse returns sentinel errors
+// Two signing schemes are supported. HS256 (Sign / Parse / ParseWithAudience /
+// ParseWithIssuer) is the legacy symmetric-key path. RS256 (SignRS256 /
+// ParseRS256) is the asymmetric-key path used with JWKS-based verification —
+// resource servers resolve the verification key via a KeySource keyed on the
+// token's kid header, and verifiers reject HS256 tokens outright to defeat
+// algorithm-confusion attacks (RFC 8725 §3.1).
+//
+// All paths share the canonical Claims type and return sentinel errors
 // (ErrTokenExpired, ErrTokenInvalid, ErrTokenMalformed); how those map to
 // HTTP responses (e.g. RFC 7662 §2.2 "active:false") is the caller's choice.
 package jwtutil
