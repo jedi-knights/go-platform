@@ -23,20 +23,7 @@ func SignRS256(claims *Claims, privateKey *rsa.PrivateKey, kid string) (string, 
 	if claims == nil {
 		return "", fmt.Errorf("signing token: claims must not be nil")
 	}
-	if privateKey == nil {
-		return "", fmt.Errorf("signing token: private key must not be nil")
-	}
-	if kid == "" {
-		return "", fmt.Errorf("signing token: kid must not be empty")
-	}
-	t := jwt.NewWithClaims(jwt.SigningMethodRS256, claims)
-	t.Header["typ"] = accessTokenJWTType
-	t.Header["kid"] = kid
-	raw, err := t.SignedString(privateKey)
-	if err != nil {
-		return "", fmt.Errorf("signing token: %w", err)
-	}
-	return raw, nil
+	return signRSA256JWT(claims, privateKey, accessTokenJWTType, kid)
 }
 
 // ParseRS256 parses and validates a raw JWT signed with RS256, resolving the

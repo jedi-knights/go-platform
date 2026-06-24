@@ -1,15 +1,23 @@
 // Package jwtutil provides JWT signing and parsing for the identity platform.
 //
-// Two signing schemes are supported. HS256 (Sign / Parse / ParseWithAudience /
+// Three token shapes are supported. HS256 (Sign / Parse / ParseWithAudience /
 // ParseWithIssuer) is the legacy symmetric-key path. RS256 (SignRS256 /
 // ParseRS256) is the asymmetric-key path used with JWKS-based verification —
 // resource servers resolve the verification key via a KeySource keyed on the
 // token's kid header, and verifiers reject HS256 tokens outright to defeat
-// algorithm-confusion attacks (RFC 8725 §3.1).
+// algorithm-confusion attacks (RFC 8725 §3.1). ID tokens (SignIDToken /
+// ParseIDToken / IDClaims / AtHash) are the OIDC Core §2 path used to assert
+// end-user identity to a relying party; they share RS256 + KeySource with
+// access tokens but carry typ:"JWT" instead of typ:"at+jwt", and each parser
+// rejects the other's typ to defeat token-type confusion.
 //
-// All paths share the canonical Claims type and return sentinel errors
-// (ErrTokenExpired, ErrTokenInvalid, ErrTokenMalformed); how those map to
-// HTTP responses (e.g. RFC 7662 §2.2 "active:false") is the caller's choice.
+// Access-token claims live in Claims; ID-token claims live in IDClaims. They
+// are sibling types, not subtypes — keeping them separate stops access-token-
+// only fields (Roles, Permissions) from leaking into ID tokens via JSON.
+//
+// All paths return sentinel errors (ErrTokenExpired, ErrTokenInvalid,
+// ErrTokenMalformed); how those map to HTTP responses (e.g. RFC 7662 §2.2
+// "active:false") is the caller's choice.
 package jwtutil
 
 import (
