@@ -56,18 +56,26 @@ func SignIDToken(claims *IDClaims, privateKey *rsa.PrivateKey, kid string) (stri
 	if claims == nil {
 		return "", fmt.Errorf("signing ID token: claims must not be nil")
 	}
+	return signRSA256JWT(claims, privateKey, idTokenJWTType, kid)
+}
+
+// signRSA256JWT is the shared body of SignRS256 and SignIDToken. The typed-
+// nil check belongs in the caller (Go's interface nil-trap means we cannot
+// safely accept *Claims / *IDClaims via the jwt.Claims interface and detect
+// nil here without a typeswitch).
+func signRSA256JWT(claims jwt.Claims, privateKey *rsa.PrivateKey, typ, kid string) (string, error) {
 	if privateKey == nil {
-		return "", fmt.Errorf("signing ID token: private key must not be nil")
+		return "", fmt.Errorf("signing token: private key must not be nil")
 	}
 	if kid == "" {
-		return "", fmt.Errorf("signing ID token: kid must not be empty")
+		return "", fmt.Errorf("signing token: kid must not be empty")
 	}
 	t := jwt.NewWithClaims(jwt.SigningMethodRS256, claims)
-	t.Header["typ"] = idTokenJWTType
+	t.Header["typ"] = typ
 	t.Header["kid"] = kid
 	raw, err := t.SignedString(privateKey)
 	if err != nil {
-		return "", fmt.Errorf("signing ID token: %w", err)
+		return "", fmt.Errorf("signing token: %w", err)
 	}
 	return raw, nil
 }
@@ -123,11 +131,8 @@ func idTokenKeyfunc(ctx context.Context, keySource KeySource) jwt.Keyfunc {
 			return nil, fmt.Errorf("unexpected signing alg: %v", alg)
 		}
 		typ, _ := t.Header["typ"].(string)
-		if typ == accessTokenJWTType {
-			return nil, fmt.Errorf("ID-token parser rejected typ:%q (access-token type)", typ)
-		}
-		if typ != "" && typ != idTokenJWTType {
-			return nil, fmt.Errorf("unexpected ID-token typ: %v", typ)
+		if err := validateIDTokenTyp(typ); err != nil {
+			return nil, err
 		}
 		kid, _ := t.Header["kid"].(string)
 		if kid == "" {
@@ -142,6 +147,20 @@ func idTokenKeyfunc(ctx context.Context, keySource KeySource) jwt.Keyfunc {
 		}
 		return pub, nil
 	}
+}
+
+// validateIDTokenTyp enforces the ID-token typ-header invariant. Extracted so
+// idTokenKeyfunc stays under the cyclomatic-complexity cap. Two failure modes
+// are distinguished by error message so a triage reader can tell whether they
+// saw a token-type-confusion attempt (at+jwt) or just an unexpected value.
+func validateIDTokenTyp(typ string) error {
+	if typ == accessTokenJWTType {
+		return fmt.Errorf("ID-token parser rejected typ:%q (access-token type)", typ)
+	}
+	if typ != "" && typ != idTokenJWTType {
+		return fmt.Errorf("unexpected ID-token typ: %v", typ)
+	}
+	return nil
 }
 
 // AtHash returns the OIDC at_hash claim value for the given access token:
