@@ -27,6 +27,14 @@ jobs:
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Configure git identity
+        # go-semantic-release shells out to `git tag -a` (annotated tag),
+        # which requires a committer identity on the runner. Without this
+        # step the tag step fails with "empty ident name not allowed".
+        run: |
+          git config user.name "semantic-release-bot"
+          git config user.email "semantic-release-bot@users.noreply.github.com"
+
       - name: Run go-semantic-release
         uses: jedi-knights/go-semantic-release@v0.10.2
         with:
