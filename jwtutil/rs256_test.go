@@ -152,7 +152,7 @@ func TestSignRS256_AlgInHeader(t *testing.T) {
 }
 
 // TestSignRS256_TypInHeader verifies access tokens still carry typ:"at+jwt"
-// (RFC 9068 §2.1) under RS256, matching the HS256 behaviour.
+// (RFC 9068 §2.1) under RS256, matching the HS256 behavior.
 func TestSignRS256_TypInHeader(t *testing.T) {
 	t.Parallel()
 
@@ -239,7 +239,7 @@ func TestParseRS256_MalformedToken(t *testing.T) {
 	}
 }
 
-// TestParseRS256_RejectsHS256 is the algorithm-confusion defence (RFC 8725 §3.1).
+// TestParseRS256_RejectsHS256 is the algorithm-confusion defense (RFC 8725 §3.1).
 // If ParseRS256 accepted HS256 tokens, an attacker holding the public key could
 // forge tokens by signing HS256 with the RSA public key as the HMAC secret —
 // a documented attack against RS256 verifiers that allow algorithm flexibility.
@@ -272,7 +272,7 @@ func TestParseRS256_RejectsHS256(t *testing.T) {
 	}
 }
 
-// TestParseRS256_RejectsNoneAlgorithm verifies the alg=none confusion defence.
+// TestParseRS256_RejectsNoneAlgorithm verifies the alg=none confusion defense.
 func TestParseRS256_RejectsNoneAlgorithm(t *testing.T) {
 	t.Parallel()
 
@@ -324,7 +324,7 @@ func TestParseRS256_RejectsMissingKID(t *testing.T) {
 	}
 }
 
-// TestParseRS256_RejectsTokenWithoutAtJWTTyp mirrors the HS256 defence:
+// TestParseRS256_RejectsTokenWithoutAtJWTTyp mirrors the HS256 defense:
 // tokens missing typ:"at+jwt" are refused (RFC 9068 §2.1 / RFC 8725 §3.11).
 func TestParseRS256_RejectsTokenWithoutAtJWTTyp(t *testing.T) {
 	t.Parallel()

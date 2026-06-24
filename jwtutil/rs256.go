@@ -43,7 +43,7 @@ func SignRS256(claims *Claims, privateKey *rsa.PrivateKey, kid string) (string, 
 // verification key via keySource based on the kid header. The keyfunc enforces:
 //
 //   - alg header is exactly RS256 — no fallback to HS256 with the public key
-//     as the secret (RFC 8725 §3.1 algorithm-confusion defence)
+//     as the secret (RFC 8725 §3.1 algorithm-confusion defense)
 //   - typ header is exactly "at+jwt" (RFC 9068 §2.1 / RFC 8725 §3.11)
 //   - kid header is present and non-empty
 //
@@ -56,7 +56,25 @@ func ParseRS256(ctx context.Context, raw string, keySource KeySource) (*Claims, 
 	if keySource == nil {
 		return nil, fmt.Errorf("parsing token: %w", ErrTokenInvalid)
 	}
-	token, err := jwt.ParseWithClaims(raw, &Claims{}, func(t *jwt.Token) (any, error) {
+	token, err := jwt.ParseWithClaims(raw, &Claims{}, rs256Keyfunc(ctx, keySource))
+	if err != nil {
+		return nil, mapJWTError(err)
+	}
+
+	claims, ok := token.Claims.(*Claims)
+	if !ok || !token.Valid {
+		return nil, fmt.Errorf("parsing token: %w", ErrTokenInvalid)
+	}
+
+	return claims, nil
+}
+
+// rs256Keyfunc builds the jwt.Keyfunc that ParseRS256 hands to the underlying
+// library. It is factored out so the validation branches it contains (method,
+// alg, typ, kid, key resolution) sit in a single function with their own
+// complexity budget — not stacked on top of ParseRS256's result-handling code.
+func rs256Keyfunc(ctx context.Context, keySource KeySource) jwt.Keyfunc {
+	return func(t *jwt.Token) (any, error) {
 		if _, ok := t.Method.(*jwt.SigningMethodRSA); !ok {
 			return nil, fmt.Errorf("unexpected signing method: %v", t.Header["alg"])
 		}
@@ -78,15 +96,5 @@ func ParseRS256(ctx context.Context, raw string, keySource KeySource) (*Claims, 
 			return nil, fmt.Errorf("no public key for kid %q", kid)
 		}
 		return pub, nil
-	})
-	if err != nil {
-		return nil, mapJWTError(err)
 	}
-
-	claims, ok := token.Claims.(*Claims)
-	if !ok || !token.Valid {
-		return nil, fmt.Errorf("parsing token: %w", ErrTokenInvalid)
-	}
-
-	return claims, nil
 }
