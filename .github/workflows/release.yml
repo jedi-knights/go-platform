@@ -1,0 +1,33 @@
+name: Release
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write       # Push tags, create GitHub releases
+  issues: write         # Open failure issues if the release pipeline breaks
+  pull-requests: write  # Comment on PRs that triggered a release
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # Full history is required so semantic-release can read commit messages
+          # back to the previous tag and compute the next version.
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Run go-semantic-release
+        uses: jedi-knights/go-semantic-release@v0.10.2
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
