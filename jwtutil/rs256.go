@@ -30,7 +30,7 @@ func SignRS256(claims *Claims, privateKey *rsa.PrivateKey, kid string) (string, 
 		return "", fmt.Errorf("signing token: kid must not be empty")
 	}
 	t := jwt.NewWithClaims(jwt.SigningMethodRS256, claims)
-	t.Header["typ"] = "at+jwt"
+	t.Header["typ"] = accessTokenJWTType
 	t.Header["kid"] = kid
 	raw, err := t.SignedString(privateKey)
 	if err != nil {
@@ -63,7 +63,7 @@ func ParseRS256(ctx context.Context, raw string, keySource KeySource) (*Claims, 
 		if alg, _ := t.Header["alg"].(string); alg != "RS256" {
 			return nil, fmt.Errorf("unexpected signing alg: %v", alg)
 		}
-		if typ, _ := t.Header["typ"].(string); typ != "at+jwt" {
+		if typ, _ := t.Header["typ"].(string); typ != accessTokenJWTType {
 			return nil, fmt.Errorf("unexpected token type: %v", t.Header["typ"])
 		}
 		kid, _ := t.Header["kid"].(string)
