@@ -68,6 +68,49 @@ type Claims struct {
 	Permissions []string `json:"permissions,omitempty"`
 	ActorType   string   `json:"actor_type,omitempty"`
 	AgentID     string   `json:"agent_id,omitempty"`
+
+	// Act carries the RFC 8693 §4.1 actor (delegation) chain. Each level
+	// records the principal acting on behalf of the level below; the
+	// outermost Actor is the most recent actor. Empty when the token was
+	// issued without delegation (the default for client_credentials,
+	// authorization_code, and refresh_token grants).
+	//
+	// A pointer to a value type lets us emit `null` semantics via
+	// omitempty (a nil pointer is dropped, a populated pointer is
+	// serialized). Storing Actor by value inside Actor (rather than by
+	// pointer-recursion) keeps deserialisation simple — the encoding/json
+	// recursion limit applies, but realistic chains stay shallow
+	// (AUTH_MAX_DELEGATION_DEPTH defaults to 3 in identity-platform-go).
+	Act *Actor `json:"act,omitempty"`
+}
+
+// Actor is one level of the RFC 8693 §4.1 actor chain.
+//
+// Sub identifies the principal at this level; ActorType / AgentID
+// classify it per ADR-0015. Act recursively points to the next level —
+// when nil, this is the deepest actor in the chain (i.e., the original
+// caller that initiated the delegation).
+//
+// All fields are omitempty so the wire form stays compact for the
+// common case (single-hop delegation: outer Act with no inner Act).
+type Actor struct {
+	Sub       string `json:"sub,omitempty"`
+	ActorType string `json:"actor_type,omitempty"`
+	AgentID   string `json:"agent_id,omitempty"`
+	ClientID  string `json:"client_id,omitempty"`
+	Act       *Actor `json:"act,omitempty"`
+}
+
+// Depth reports the length of the actor chain rooted at a. A nil
+// receiver returns 0 — convenient for clamping against a configured
+// max-delegation-depth without a nil guard at the call site. The
+// receiver itself counts as 1; each nested Act adds 1.
+func (a *Actor) Depth() int {
+	depth := 0
+	for cursor := a; cursor != nil; cursor = cursor.Act {
+		depth++
+	}
+	return depth
 }
 
 // ClaimsConfig holds all inputs for NewClaims. Using a config struct instead of
@@ -92,6 +135,13 @@ type ClaimsConfig struct {
 	// AgentID is the stable agent identifier per ADR-0015. Set when
 	// ActorType is "agent"; empty otherwise.
 	AgentID string
+
+	// Act is the RFC 8693 §4.1 delegation chain rooted at the most
+	// recent actor. Nil omits the claim — every grant other than
+	// token-exchange leaves this nil. The token-exchange grant
+	// constructs the chain by prepending the current actor to the
+	// subject_token's Act chain.
+	Act *Actor
 }
 
 // NewClaims constructs a Claims value from cfg, avoiding direct dependency on
@@ -119,6 +169,7 @@ func NewClaims(cfg ClaimsConfig) *Claims {
 		Permissions: append([]string(nil), cfg.Permissions...),
 		ActorType:   cfg.ActorType,
 		AgentID:     cfg.AgentID,
+		Act:         cfg.Act,
 	}
 }
 
