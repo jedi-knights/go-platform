@@ -104,4 +104,3 @@ func (m *MultiSink) Sink(ctx context.Context, event Event) error {
 	}
 	return errors.Join(errs...)
 }
-

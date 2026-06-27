@@ -105,18 +105,29 @@ func validateIdentifier(s string) error {
 		return errors.New("identifier exceeds 63 characters")
 	}
 	for i, r := range s {
-		switch {
-		case r >= 'a' && r <= 'z',
-			r >= 'A' && r <= 'Z',
-			r == '_':
-			// always allowed
-		case r >= '0' && r <= '9':
-			if i == 0 {
-				return errors.New("identifier cannot start with a digit")
-			}
-		default:
-			return fmt.Errorf("identifier contains invalid character %q at position %d", r, i)
+		if err := validateIdentifierRune(r, i); err != nil {
+			return err
 		}
 	}
 	return nil
+}
+
+// validateIdentifierRune enforces the Postgres-identifier rules on a
+// single rune. Extracted from [validateIdentifier] so the parent stays
+// under the cyclop budget.
+func validateIdentifierRune(r rune, position int) error {
+	if isLetterOrUnderscore(r) {
+		return nil
+	}
+	if r >= '0' && r <= '9' {
+		if position == 0 {
+			return errors.New("identifier cannot start with a digit")
+		}
+		return nil
+	}
+	return fmt.Errorf("identifier contains invalid character %q at position %d", r, position)
+}
+
+func isLetterOrUnderscore(r rune) bool {
+	return (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || r == '_'
 }

@@ -26,7 +26,7 @@
 //
 // This package is intentionally not a generic OTel wrapper. It hides
 // nothing the OTel SDK exposes; it only handles bootstrap, picks
-// sensible defaults, and centralises the attribute-key vocabulary.
+// sensible defaults, and centralizes the attribute-key vocabulary.
 // Custom span processors, samplers, and propagators are out of scope —
 // services that need those use the SDK directly.
 //

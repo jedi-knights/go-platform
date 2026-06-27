@@ -89,23 +89,13 @@ const (
 // are absent (legacy clients pre-ADR-0015, service-to-service calls
 // without a subject).
 func Actor(actorType, actorID, subjectID, agentID, clientID string) []attribute.KeyValue {
-	out := make([]attribute.KeyValue, 0, 5)
-	if actorType != "" {
-		out = append(out, attribute.String(AttrActorType, actorType))
-	}
-	if actorID != "" {
-		out = append(out, attribute.String(AttrActorID, actorID))
-	}
-	if subjectID != "" {
-		out = append(out, attribute.String(AttrSubjectID, subjectID))
-	}
-	if agentID != "" {
-		out = append(out, attribute.String(AttrAgentID, agentID))
-	}
-	if clientID != "" {
-		out = append(out, attribute.String(AttrClientID, clientID))
-	}
-	return out
+	return collectNonEmpty([]attrPair{
+		{AttrActorType, actorType},
+		{AttrActorID, actorID},
+		{AttrSubjectID, subjectID},
+		{AttrAgentID, agentID},
+		{AttrClientID, clientID},
+	})
 }
 
 // Resource returns the resource-taxonomy attribute set per ADR-0019.
@@ -113,21 +103,31 @@ func Actor(actorType, actorID, subjectID, agentID, clientID string) []attribute.
 // so a downstream consumer can correlate spans and audit rows by
 // resource_path alone.
 func Resource(resource, kind, id, parent, path string) []attribute.KeyValue {
-	out := make([]attribute.KeyValue, 0, 5)
-	if resource != "" {
-		out = append(out, attribute.String(AttrResource, resource))
-	}
-	if kind != "" {
-		out = append(out, attribute.String(AttrResourceKind, kind))
-	}
-	if id != "" {
-		out = append(out, attribute.String(AttrResourceID, id))
-	}
-	if parent != "" {
-		out = append(out, attribute.String(AttrResourceParent, parent))
-	}
-	if path != "" {
-		out = append(out, attribute.String(AttrResourcePath, path))
+	return collectNonEmpty([]attrPair{
+		{AttrResource, resource},
+		{AttrResourceKind, kind},
+		{AttrResourceID, id},
+		{AttrResourceParent, parent},
+		{AttrResourcePath, path},
+	})
+}
+
+// attrPair is the (key, value) input shape used by [collectNonEmpty].
+// Keeping the constructor explicit lets readers match each Actor /
+// Resource field to its semantic attribute key.
+type attrPair struct {
+	key, value string
+}
+
+// collectNonEmpty drops empty-string values and returns a slice of
+// attribute.KeyValue entries — the de-duplicated body that Actor and
+// Resource originally repeated verbatim.
+func collectNonEmpty(pairs []attrPair) []attribute.KeyValue {
+	out := make([]attribute.KeyValue, 0, len(pairs))
+	for _, p := range pairs {
+		if p.value != "" {
+			out = append(out, attribute.String(p.key, p.value))
+		}
 	}
 	return out
 }

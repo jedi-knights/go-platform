@@ -60,7 +60,7 @@ func TestNewEventID_TimeOrdered(t *testing.T) {
 	for {
 		b := audit.NewEventID()
 		if b[:10] != a[:10] {
-			if !(a < b) {
+			if a >= b {
 				t.Fatalf("expected a < b, got a=%q b=%q", a, b)
 			}
 			return

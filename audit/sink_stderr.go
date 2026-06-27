@@ -9,7 +9,7 @@ import (
 )
 
 // StderrJSONSink writes one JSON line per event to a target [io.Writer]
-// (defaulting to os.Stderr). Writes are serialised by an internal mutex
+// (defaulting to os.Stderr). Writes are serialized by an internal mutex
 // so concurrent emits never interleave bytes.
 //
 // StderrJSONSink is synchronous: Sink returns only after the bytes are
@@ -58,8 +58,8 @@ func (s *StderrJSONSink) Sink(ctx context.Context, event Event) error {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if _, err := s.w.Write(b); err != nil {
-		return err
+	if _, werr := s.w.Write(b); werr != nil {
+		return werr
 	}
 	_, err = s.w.Write(newline)
 	return err
