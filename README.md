@@ -32,7 +32,7 @@ Shared Go libraries for jedi-knights services: structured errors, HTTP utilities
 | [`testutil`](testutil/) | Shared test helpers | Under review |
 | [`audit`](audit/) | Agent audit event schema + pluggable sinks (see ADR-0018 in identity-platform-go) | ✅ Available |
 | [`audit/durable`](audit/durable/) | Postgres-backed at-least-once durable sink (ADR-0019) | ✅ Available |
-| [`otel`](otel/) | Minimal OpenTelemetry bootstrap for end-to-end tracing | Planned (agentic-posture P0/P1) |
+| [`otel`](otel/) | Minimal OpenTelemetry bootstrap for end-to-end tracing | ✅ Available |
 
 ## Requirements
 
