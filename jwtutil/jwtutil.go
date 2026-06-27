@@ -77,7 +77,7 @@ type Claims struct {
 	//
 	// A pointer to a value type lets us emit `null` semantics via
 	// omitempty (a nil pointer is dropped, a populated pointer is
-	// serialised). Storing Actor by value inside Actor (rather than by
+	// serialized). Storing Actor by value inside Actor (rather than by
 	// pointer-recursion) keeps deserialisation simple — the encoding/json
 	// recursion limit applies, but realistic chains stay shallow
 	// (AUTH_MAX_DELEGATION_DEPTH defaults to 3 in identity-platform-go).
