@@ -30,6 +30,8 @@ Shared Go libraries for jedi-knights services: structured errors, HTTP utilities
 | [`jwtutil`](jwtutil/) | Canonical `Claims`, `Sign`, `Parse` for HS256 JWTs | Planned |
 | [`httputil`](httputil/) | `WriteJSON`, `WriteError`, request and trace ID middleware | Planned (blocked on `go-logging` v2.0.0 tag) |
 | [`testutil`](testutil/) | Shared test helpers | Under review |
+| [`audit`](audit/) | Agent audit event schema + pluggable sinks (see ADR-0018 in identity-platform-go) | Planned (agentic-posture P0/P2) |
+| [`otel`](otel/) | Minimal OpenTelemetry bootstrap for end-to-end tracing | Planned (agentic-posture P0/P1) |
 
 ## Requirements
 
@@ -63,6 +65,25 @@ status := apperrors.HTTPStatus(err) // 404
 ```
 
 See [`apperrors/`](apperrors/) for the full reference.
+
+## Agentic posture roadmap
+
+Two new packages are planned to support the portfolio-wide agentic-enterprise
+posture documented in
+[jedi-knights/architecture/docs/agentic-posture.md](https://github.com/jedi-knights/architecture/blob/main/docs/agentic-posture.md):
+
+- **`audit`** — structured agent-audit events with a stable cross-service
+  schema (see ADR-0018 in `identity-platform-go`). Pluggable sinks (stderr
+  JSON, OTel log, append-only file). Non-blocking emission so the audit hot
+  path can't fail the underlying operation.
+- **`otel`** — minimal OpenTelemetry bootstrap (span helpers, context
+  propagation, env-based exporter selection) so every service emits traces
+  with consistent `agent_id`, `tool_name`, `policy_decision` attributes.
+
+Both packages release independently via the existing semantic-release pipeline.
+The `jwtutil.Claims` type is the entry point for the new `actor_type` /
+`agent_id` claims described in ADR-0015 of `identity-platform-go` — added
+additively, no breaking change.
 
 ## Configuration
 
