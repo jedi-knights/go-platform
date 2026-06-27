@@ -54,12 +54,20 @@ const accessTokenJWTType = "at+jwt"
 // by the subject's roles at token issuance. Resource services use this claim for
 // local authorization evaluation without an outbound policy service call.
 // Both fields are omitempty — tokens issued without RBAC context omit them.
+//
+// ActorType and AgentID are introduced by identity-platform-go ADR-0015.
+// ActorType identifies the principal kind ("user" | "service" | "agent") for
+// audit and policy attribution; AgentID is the stable agent identifier and is
+// populated only when ActorType is "agent". Both are omitempty so resource
+// servers that do not yet consume them are unaffected.
 type Claims struct {
 	jwt.RegisteredClaims
 	ClientID    string   `json:"client_id"`
 	Scope       string   `json:"scope"`
 	Roles       []string `json:"roles,omitempty"`
 	Permissions []string `json:"permissions,omitempty"`
+	ActorType   string   `json:"actor_type,omitempty"`
+	AgentID     string   `json:"agent_id,omitempty"`
 }
 
 // ClaimsConfig holds all inputs for NewClaims. Using a config struct instead of
@@ -76,6 +84,14 @@ type ClaimsConfig struct {
 	Permissions []string
 	IssuedAt    time.Time
 	ExpiresAt   time.Time
+
+	// ActorType identifies the principal kind ("user" | "service" | "agent")
+	// per identity-platform-go ADR-0015. Empty omits the claim, preserving the
+	// pre-ADR-0015 wire shape for callers that do not yet classify principals.
+	ActorType string
+	// AgentID is the stable agent identifier per ADR-0015. Set when
+	// ActorType is "agent"; empty otherwise.
+	AgentID string
 }
 
 // NewClaims constructs a Claims value from cfg, avoiding direct dependency on
@@ -101,6 +117,8 @@ func NewClaims(cfg ClaimsConfig) *Claims {
 		Scope:       cfg.Scope,
 		Roles:       append([]string(nil), cfg.Roles...),
 		Permissions: append([]string(nil), cfg.Permissions...),
+		ActorType:   cfg.ActorType,
+		AgentID:     cfg.AgentID,
 	}
 }
 

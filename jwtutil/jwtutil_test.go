@@ -530,3 +530,61 @@ func TestParseWithIssuer_MissingIssuer(t *testing.T) {
 		t.Errorf("error = %v, want ErrTokenInvalid", err)
 	}
 }
+
+// --- ActorType + AgentID (ADR-0015) ---
+
+func TestRoundTrip_ActorTypeAndAgentID(t *testing.T) {
+	now := time.Now().Truncate(time.Second)
+	claims := jwtutil.NewClaims(jwtutil.ClaimsConfig{
+		Issuer:    "identity-platform",
+		Subject:   "agent-claude",
+		TokenID:   "token-id-1",
+		ClientID:  "agent-claude",
+		Scope:     "read",
+		ActorType: "agent",
+		AgentID:   "agent-claude",
+		IssuedAt:  now,
+		ExpiresAt: now.Add(time.Hour),
+	})
+
+	raw := signedToken(t, claims)
+
+	got, err := jwtutil.Parse(raw, testKey)
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	if got.ActorType != "agent" {
+		t.Errorf("ActorType: got %q, want agent", got.ActorType)
+	}
+	if got.AgentID != "agent-claude" {
+		t.Errorf("AgentID: got %q, want agent-claude", got.AgentID)
+	}
+}
+
+func TestRoundTrip_OmitsActorTypeWhenEmpty(t *testing.T) {
+	// Pre-ADR-0015 callers do not set ActorType. omitempty must keep the
+	// wire shape compatible — tokens without actor_type must still parse
+	// cleanly and return empty fields.
+	now := time.Now().Truncate(time.Second)
+	claims := jwtutil.NewClaims(jwtutil.ClaimsConfig{
+		Issuer:    "identity-platform",
+		Subject:   "client-abc",
+		TokenID:   "token-id-2",
+		ClientID:  "client-abc",
+		Scope:     "read",
+		IssuedAt:  now,
+		ExpiresAt: now.Add(time.Hour),
+	})
+
+	raw := signedToken(t, claims)
+	got, err := jwtutil.Parse(raw, testKey)
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	if got.ActorType != "" {
+		t.Errorf("ActorType: got %q, want empty", got.ActorType)
+	}
+	if got.AgentID != "" {
+		t.Errorf("AgentID: got %q, want empty", got.AgentID)
+	}
+}

@@ -42,6 +42,16 @@ type IDClaims struct {
 	EmailVerified *bool  `json:"email_verified,omitempty"`
 	Name          string `json:"name,omitempty"`
 	UpdatedAt     int64  `json:"updated_at,omitempty"`
+
+	// ActorType identifies the principal kind ("user" | "service" | "agent")
+	// per identity-platform-go ADR-0015. Empty omits the claim. ID tokens for
+	// an OIDC end-user typically carry "user"; the field exists on IDClaims
+	// for symmetry with [Claims] when an agent surfaces as the end-user
+	// (uncommon today, but the wire shape stays stable).
+	ActorType string `json:"actor_type,omitempty"`
+	// AgentID is the stable agent identifier per ADR-0015. Set when
+	// ActorType is "agent"; empty otherwise.
+	AgentID string `json:"agent_id,omitempty"`
 }
 
 // SignIDToken signs OIDC ID-token claims with RSASSA-PKCS1-v1_5 + SHA-256
