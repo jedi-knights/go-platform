@@ -61,7 +61,7 @@ func NewAsyncSink(inner Sink, bufferSize int) *AsyncSink {
 // Sink enqueues the event. Returns [ErrAsyncSinkClosed] if the sink has been
 // closed; otherwise returns nil. Events that don't fit in the buffer are
 // dropped and the dropped counter is incremented; the call still returns nil
-// because dropping is the documented behaviour.
+// because dropping is the documented behavior.
 func (s *AsyncSink) Sink(_ context.Context, event Event) error {
 	if s.stopped.Load() {
 		return ErrAsyncSinkClosed

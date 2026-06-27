@@ -16,7 +16,7 @@ const SchemaVersion = "1.0"
 // in identity-platform-go ADR-0015.
 type ActorType string
 
-// Recognised actor types. The set is closed at the contract level —
+// Recognized actor types. The set is closed at the contract level —
 // new actor types require an ADR amendment, not just a new string.
 const (
 	ActorTypeUser    ActorType = "user"
@@ -173,35 +173,51 @@ func (e *Event) Validate() error {
 	if e == nil {
 		return wrap("nil event")
 	}
-	if e.EventID == "" {
-		return wrap("event_id is required")
-	}
-	if e.EventType == "" {
-		return wrap("event_type is required")
+	if err := e.validateRequiredStrings(); err != nil {
+		return err
 	}
 	if e.Timestamp.IsZero() {
 		return wrap("timestamp is required")
 	}
-	if e.Service == "" {
-		return wrap("service is required")
+	if err := e.validateEnums(); err != nil {
+		return err
 	}
-	if e.ActorType == "" {
-		return wrap("actor_type is required")
+	return nil
+}
+
+// validateRequiredStrings checks every required string field on the
+// envelope. Extracted from [Event.Validate] so the entry point stays
+// under the gocyclo budget; each rule still maps 1:1 to ADR-0018's
+// schema so a reader can match field-to-rule at a glance.
+func (e *Event) validateRequiredStrings() error {
+	checks := []struct {
+		value, name string
+	}{
+		{e.EventID, "event_id"},
+		{e.EventType, "event_type"},
+		{e.Service, "service"},
+		{string(e.ActorType), "actor_type"},
+		{e.ActorID, "actor_id"},
+		{e.Resource, "resource"},
+		{e.Action, "action"},
 	}
+	for _, c := range checks {
+		if c.value == "" {
+			return wrap("%s is required", c.name)
+		}
+	}
+	return nil
+}
+
+// validateEnums checks the closed-vocabulary fields (actor_type,
+// decision). Extracted from [Event.Validate] so each helper stays
+// under the gocyclo budget.
+func (e *Event) validateEnums() error {
 	switch e.ActorType {
 	case ActorTypeUser, ActorTypeService, ActorTypeAgent:
-		// recognised
+		// recognized
 	default:
 		return wrap("actor_type %q is not one of user, service, agent", e.ActorType)
-	}
-	if e.ActorID == "" {
-		return wrap("actor_id is required")
-	}
-	if e.Resource == "" {
-		return wrap("resource is required")
-	}
-	if e.Action == "" {
-		return wrap("action is required")
 	}
 	if e.Decision != "" && e.Decision != DecisionAllow && e.Decision != DecisionDeny {
 		return wrap("decision %q is not one of allow, deny", e.Decision)

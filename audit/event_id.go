@@ -34,12 +34,15 @@ func newEventIDAt(now time.Time) string {
 	if ms >= 1<<48 {
 		panic("audit: ULID timestamp overflow")
 	}
-	b[0] = byte(ms >> 40)
-	b[1] = byte(ms >> 32)
-	b[2] = byte(ms >> 24)
-	b[3] = byte(ms >> 16)
-	b[4] = byte(ms >> 8)
-	b[5] = byte(ms)
+	// The byte conversions are masked with 0xFF so gosec's G115 lint
+	// is satisfied; the mask is also a defensive guard if the panic
+	// above is ever weakened.
+	b[0] = byte((ms >> 40) & 0xFF)
+	b[1] = byte((ms >> 32) & 0xFF)
+	b[2] = byte((ms >> 24) & 0xFF)
+	b[3] = byte((ms >> 16) & 0xFF)
+	b[4] = byte((ms >> 8) & 0xFF)
+	b[5] = byte(ms & 0xFF)
 
 	// Last 80 bits: cryptographic randomness. crypto/rand.Read never returns
 	// a partial read or recoverable error per its current contract; if it

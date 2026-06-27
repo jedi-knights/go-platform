@@ -91,7 +91,7 @@ func TestEventValidate_BadEnumValues(t *testing.T) {
 
 func TestEventValidate_DecisionOptional(t *testing.T) {
 	// Empty decision is permitted (Allow is implicit), but a non-empty
-	// value must be one of the recognised constants.
+	// value must be one of the recognized constants.
 	e := validEvent()
 	e.Decision = ""
 	if err := e.Validate(); err != nil {

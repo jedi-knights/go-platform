@@ -32,7 +32,7 @@
 // # Concurrency model
 //
 //   - [Emitter.Emit] is safe to call concurrently from any goroutine.
-//   - [StderrJSONSink] writes synchronously and serialises writes via an
+//   - [StderrJSONSink] writes synchronously and serializes writes via an
 //     internal mutex so concurrent emits never interleave bytes on stderr.
 //   - [AsyncSink] enqueues into a fixed-size channel; when the channel is
 //     full the event is dropped and an internal drop counter is incremented,
