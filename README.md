@@ -30,7 +30,7 @@ Shared Go libraries for jedi-knights services: structured errors, HTTP utilities
 | [`jwtutil`](jwtutil/) | Canonical `Claims`, `Sign`, `Parse` for HS256 JWTs | Planned |
 | [`httputil`](httputil/) | `WriteJSON`, `WriteError`, request and trace ID middleware | Planned (blocked on `go-logging` v2.0.0 tag) |
 | [`testutil`](testutil/) | Shared test helpers | Under review |
-| [`audit`](audit/) | Agent audit event schema + pluggable sinks (see ADR-0018 in identity-platform-go) | Planned (agentic-posture P0/P2) |
+| [`audit`](audit/) | Agent audit event schema + pluggable sinks (see ADR-0018 in identity-platform-go) | ✅ Available (durable sink follow-up) |
 | [`otel`](otel/) | Minimal OpenTelemetry bootstrap for end-to-end tracing | Planned (agentic-posture P0/P1) |
 
 ## Requirements
