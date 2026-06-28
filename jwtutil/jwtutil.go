@@ -21,6 +21,7 @@
 package jwtutil
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
@@ -82,6 +83,19 @@ type Claims struct {
 	// recursion limit applies, but realistic chains stay shallow
 	// (AUTH_MAX_DELEGATION_DEPTH defaults to 3 in identity-platform-go).
 	Act *Actor `json:"act,omitempty"`
+
+	// AuthorizationDetails carries the RFC 9396 §7 granted-details
+	// array. The slice is rendered to the JWT as-is — each element is
+	// a free-form JSON object whose ``type`` discriminator selects a
+	// registered type at the resource server. The platform-defined
+	// types (mcp_tool, resource) live in identity-platform-go's
+	// authorization-details registry; jwtutil intentionally does not
+	// model them — the wire-level shape stays open per RFC 9396 §2.
+	//
+	// json.RawMessage preserves the operator-supplied JSON byte-for-byte
+	// so a resource server that expects a specific field order or
+	// numeric precision can rely on it. Empty / nil omits the claim.
+	AuthorizationDetails []json.RawMessage `json:"authorization_details,omitempty"`
 }
 
 // Actor is one level of the RFC 8693 §4.1 actor chain.
@@ -142,6 +156,12 @@ type ClaimsConfig struct {
 	// constructs the chain by prepending the current actor to the
 	// subject_token's Act chain.
 	Act *Actor
+
+	// AuthorizationDetails is the RFC 9396 granted-details array.
+	// Empty / nil omits the claim — every grant that does not accept
+	// authorization_details (or where the caller did not request it)
+	// leaves this nil. Identity-platform-go ADR-0017 wires this in.
+	AuthorizationDetails []json.RawMessage
 }
 
 // NewClaims constructs a Claims value from cfg, avoiding direct dependency on
@@ -163,13 +183,14 @@ func NewClaims(cfg ClaimsConfig) *Claims {
 			IssuedAt:  jwt.NewNumericDate(cfg.IssuedAt),
 			ExpiresAt: jwt.NewNumericDate(cfg.ExpiresAt),
 		},
-		ClientID:    cfg.ClientID,
-		Scope:       cfg.Scope,
-		Roles:       append([]string(nil), cfg.Roles...),
-		Permissions: append([]string(nil), cfg.Permissions...),
-		ActorType:   cfg.ActorType,
-		AgentID:     cfg.AgentID,
-		Act:         cfg.Act,
+		ClientID:             cfg.ClientID,
+		Scope:                cfg.Scope,
+		Roles:                append([]string(nil), cfg.Roles...),
+		Permissions:          append([]string(nil), cfg.Permissions...),
+		ActorType:            cfg.ActorType,
+		AgentID:              cfg.AgentID,
+		Act:                  cfg.Act,
+		AuthorizationDetails: append([]json.RawMessage(nil), cfg.AuthorizationDetails...),
 	}
 }
 
