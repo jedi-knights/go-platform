@@ -52,6 +52,13 @@ type IDClaims struct {
 	// AgentID is the stable agent identifier per ADR-0015. Set when
 	// ActorType is "agent"; empty otherwise.
 	AgentID string `json:"agent_id,omitempty"`
+
+	// ActiveAccountID mirrors the [Claims] field on the ID token so an
+	// OIDC client (login-ui) sees the same "which account am I acting
+	// for" value the resource server sees on the access token, without
+	// having to introspect the access token separately. Empty omits the
+	// claim (per identity-platform-go Epic 7 / E7-S3c).
+	ActiveAccountID string `json:"active_account_id,omitempty"`
 }
 
 // SignIDToken signs OIDC ID-token claims with RSASSA-PKCS1-v1_5 + SHA-256
