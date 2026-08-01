@@ -588,3 +588,58 @@ func TestRoundTrip_OmitsActorTypeWhenEmpty(t *testing.T) {
 		t.Errorf("AgentID: got %q, want empty", got.AgentID)
 	}
 }
+
+// --- ActiveAccountID (identity-platform-go Epic 7 / E7-S3c) ---
+
+func TestRoundTrip_ActiveAccountID(t *testing.T) {
+	// A subject with an active account selected: the claim survives
+	// sign -> parse and reaches the resource server for billing / usage
+	// attribution.
+	now := time.Now().Truncate(time.Second)
+	claims := jwtutil.NewClaims(jwtutil.ClaimsConfig{
+		Issuer:          "identity-platform",
+		Subject:         "user-1",
+		TokenID:         "token-id-3",
+		ClientID:        "login-ui",
+		Scope:           "read",
+		ActiveAccountID: "acc-abc",
+		IssuedAt:        now,
+		ExpiresAt:       now.Add(time.Hour),
+	})
+
+	raw := signedToken(t, claims)
+
+	got, err := jwtutil.Parse(raw, testKey)
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	if got.ActiveAccountID != "acc-abc" {
+		t.Errorf("ActiveAccountID: got %q, want acc-abc", got.ActiveAccountID)
+	}
+}
+
+func TestRoundTrip_OmitsActiveAccountIDWhenEmpty(t *testing.T) {
+	// Pre-E7-S3c callers (and any post-E7 caller minting a token for a
+	// context that has no active account — service tokens, agents
+	// without a delegating user) do not set ActiveAccountID. omitempty
+	// must keep the wire compatible.
+	now := time.Now().Truncate(time.Second)
+	claims := jwtutil.NewClaims(jwtutil.ClaimsConfig{
+		Issuer:    "identity-platform",
+		Subject:   "svc-a",
+		TokenID:   "token-id-4",
+		ClientID:  "svc-a",
+		Scope:     "read",
+		IssuedAt:  now,
+		ExpiresAt: now.Add(time.Hour),
+	})
+
+	raw := signedToken(t, claims)
+	got, err := jwtutil.Parse(raw, testKey)
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	if got.ActiveAccountID != "" {
+		t.Errorf("ActiveAccountID: got %q, want empty", got.ActiveAccountID)
+	}
+}

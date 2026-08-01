@@ -77,6 +77,52 @@ func TestSignIDToken_RoundTrip(t *testing.T) {
 	assertField(t, "Email", got.Email, "alice@example.com")
 }
 
+// TestSignIDToken_ActiveAccountID covers the E7-S3c claim mirror on
+// IDClaims: login-ui reads active_account_id from the ID token so it
+// knows which account it is currently acting for without introspecting
+// the paired access token.
+func TestSignIDToken_ActiveAccountID(t *testing.T) {
+	t.Parallel()
+	priv := newIDTokenKey(t)
+	now := time.Now().Truncate(time.Second)
+	claims := makeIDClaims(now, "login-ui")
+	claims.ActiveAccountID = "acc-abc"
+
+	raw, err := jwtutil.SignIDToken(claims, priv, "kid-1")
+	if err != nil {
+		t.Fatalf("SignIDToken: %v", err)
+	}
+	got, err := jwtutil.ParseIDToken(context.Background(), raw, idKeySource(t, "kid-1", &priv.PublicKey), "login-ui")
+	if err != nil {
+		t.Fatalf("ParseIDToken: %v", err)
+	}
+	if got.ActiveAccountID != "acc-abc" {
+		t.Errorf("ActiveAccountID: got %q, want acc-abc", got.ActiveAccountID)
+	}
+}
+
+// TestSignIDToken_OmitsActiveAccountIDWhenEmpty guards the omitempty
+// contract — pre-E7-S3c consumers must still see the claim absent from
+// the serialized token when the issuer did not populate it.
+func TestSignIDToken_OmitsActiveAccountIDWhenEmpty(t *testing.T) {
+	t.Parallel()
+	priv := newIDTokenKey(t)
+	claims := makeIDClaims(time.Now(), "login-ui")
+	// Left at zero-value; omitempty must drop the field.
+
+	raw, err := jwtutil.SignIDToken(claims, priv, "kid-1")
+	if err != nil {
+		t.Fatalf("SignIDToken: %v", err)
+	}
+	parsed, _, err := new(jwt.Parser).ParseUnverified(raw, jwt.MapClaims{})
+	if err != nil {
+		t.Fatalf("ParseUnverified: %v", err)
+	}
+	if _, present := parsed.Claims.(jwt.MapClaims)["active_account_id"]; present {
+		t.Errorf("active_account_id must be omitted when empty; got present in %v", parsed.Claims)
+	}
+}
+
 func TestSignIDToken_TypIsJWT(t *testing.T) {
 	t.Parallel()
 	priv := newIDTokenKey(t)

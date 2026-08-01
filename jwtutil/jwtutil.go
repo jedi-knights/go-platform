@@ -61,14 +61,23 @@ const accessTokenJWTType = "at+jwt"
 // audit and policy attribution; AgentID is the stable agent identifier and is
 // populated only when ActorType is "agent". Both are omitempty so resource
 // servers that do not yet consume them are unaffected.
+//
+// ActiveAccountID is introduced by identity-platform-go Epic 7 (E7-S3c). It
+// carries the entitlements-service account the subject has currently selected
+// as their working context — resource servers use it to attribute usage /
+// billing to the right tenant. Empty when the subject has not chosen an
+// active account or the issuer chose not to resolve it. Omitempty so tokens
+// minted for non-multi-tenant contexts (service-to-service, agents) stay
+// wire-compatible.
 type Claims struct {
 	jwt.RegisteredClaims
-	ClientID    string   `json:"client_id"`
-	Scope       string   `json:"scope"`
-	Roles       []string `json:"roles,omitempty"`
-	Permissions []string `json:"permissions,omitempty"`
-	ActorType   string   `json:"actor_type,omitempty"`
-	AgentID     string   `json:"agent_id,omitempty"`
+	ClientID        string   `json:"client_id"`
+	Scope           string   `json:"scope"`
+	Roles           []string `json:"roles,omitempty"`
+	Permissions     []string `json:"permissions,omitempty"`
+	ActorType       string   `json:"actor_type,omitempty"`
+	AgentID         string   `json:"agent_id,omitempty"`
+	ActiveAccountID string   `json:"active_account_id,omitempty"`
 
 	// Act carries the RFC 8693 §4.1 actor (delegation) chain. Each level
 	// records the principal acting on behalf of the level below; the
@@ -150,6 +159,13 @@ type ClaimsConfig struct {
 	// ActorType is "agent"; empty otherwise.
 	AgentID string
 
+	// ActiveAccountID is the entitlements-service account the subject
+	// has currently selected as their working context (Epic 7 / E7-S3c).
+	// Empty omits the claim — appropriate for tokens minted outside a
+	// per-user multi-seat context (service-to-service, agents without
+	// a delegating end user).
+	ActiveAccountID string
+
 	// Act is the RFC 8693 §4.1 delegation chain rooted at the most
 	// recent actor. Nil omits the claim — every grant other than
 	// token-exchange leaves this nil. The token-exchange grant
@@ -189,6 +205,7 @@ func NewClaims(cfg ClaimsConfig) *Claims {
 		Permissions:          append([]string(nil), cfg.Permissions...),
 		ActorType:            cfg.ActorType,
 		AgentID:              cfg.AgentID,
+		ActiveAccountID:      cfg.ActiveAccountID,
 		Act:                  cfg.Act,
 		AuthorizationDetails: append([]json.RawMessage(nil), cfg.AuthorizationDetails...),
 	}
