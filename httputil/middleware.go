@@ -1,6 +1,7 @@
 package httputil
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"regexp"
@@ -8,6 +9,7 @@ import (
 	"time"
 
 	"github.com/jedi-knights/go-logging/pkg/logging"
+	"go.opentelemetry.io/otel/trace"
 )
 
 // Logger is an alias for [logging.Logger]. It keeps middleware signatures
@@ -95,7 +97,7 @@ func LoggingMiddleware(logger Logger) func(http.Handler) http.Handler {
 			// Read correlation IDs set by upstream middleware. Both default
 			// to "" when not present; the log line still records the absence.
 			ctx := r.Context()
-			traceID := logging.TraceIDFromContext(ctx)
+			traceID, spanID := traceIDsFromContext(ctx)
 			requestID := logging.RequestIDFromContext(ctx)
 
 			remoteIP := remoteIP(r.RemoteAddr)
@@ -115,6 +117,7 @@ func LoggingMiddleware(logger Logger) func(http.Handler) http.Handler {
 				"status", rw.status,
 				"duration_ms", duration.Milliseconds(),
 				"trace_id", traceID,
+				"span_id", spanID,
 				"request_id", requestID,
 				"remote_ip", remoteIP,
 				"user_agent", r.UserAgent(),
@@ -122,6 +125,19 @@ func LoggingMiddleware(logger Logger) func(http.Handler) http.Handler {
 			l.Info("request completed")
 		})
 	}
+}
+
+// traceIDsFromContext returns the trace_id and span_id to attach to a
+// log record. When an OTel span is present on the context its IDs win
+// — that is the identifier the trace backend indexes. When no span is
+// present we fall back to the custom UUID stashed by
+// TraceIDMiddleware so the X-Trace-ID response header and the log
+// line stay consistent for callers that have not yet adopted OTel.
+func traceIDsFromContext(ctx context.Context) (traceID, spanID string) {
+	if sc := trace.SpanContextFromContext(ctx); sc.IsValid() {
+		return sc.TraceID().String(), sc.SpanID().String()
+	}
+	return logging.TraceIDFromContext(ctx), ""
 }
 
 // remoteIP extracts the IP address from a "host:port" RemoteAddr string.
@@ -144,8 +160,8 @@ func RecoveryMiddleware(logger Logger) func(http.Handler) http.Handler {
 			defer func() {
 				if rec := recover(); rec != nil {
 					ctx := r.Context()
-					traceID := logging.TraceIDFromContext(ctx)
-					logger.With("trace_id", traceID, "panic", fmt.Sprintf("%v", rec)).
+					traceID, spanID := traceIDsFromContext(ctx)
+					logger.With("trace_id", traceID, "span_id", spanID, "panic", fmt.Sprintf("%v", rec)).
 						Error("recovered from panic")
 					if !rw.wroteHeader {
 						http.Error(rw, "internal server error", http.StatusInternalServerError)
