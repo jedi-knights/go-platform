@@ -46,7 +46,7 @@ type Observability struct {
 	PromRegistry *prometheus.Registry
 
 	// PromHandler is the http.Handler for /metrics. Mount it on the
-	// metrics listener (see httputil.ServeMetrics) so Fly's hosted
+	// metrics listener (see httpserver.StartMetricsServer) so Fly's hosted
 	// Prometheus can scrape it.
 	PromHandler http.Handler
 

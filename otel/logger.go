@@ -77,7 +77,7 @@ func (h *SpanContextHandler) WithGroup(name string) slog.Handler {
 // The returned Logger is API-compatible with go-logging.New(cfg); the
 // only observable difference is that trace_id and span_id now reflect
 // the OTel span (not the custom UUID that go-logging and
-// httputil.TraceIDMiddleware previously injected independently).
+// httpmw.TraceID previously injected independently).
 func initLogger(cfg Config) logging.Logger {
 	level, _ := logging.ParseLevel(cfg.LogLevel)
 	base := buildBaseSlogHandler(cfg, level)
