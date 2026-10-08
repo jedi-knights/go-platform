@@ -28,7 +28,8 @@ Shared Go libraries for jedi-knights services: structured errors, HTTP utilities
 |---|---|---|
 | [`apperrors`](apperrors/) | Structured `AppError` with `ErrorCode` and HTTP status mapping | ✅ Available |
 | [`jwtutil`](jwtutil/) | Canonical `Claims`, `Sign`, `Parse` for HS256 JWTs | Planned |
-| [`httputil`](httputil/) | `WriteJSON`, `WriteError`, request and trace ID middleware | Planned (blocked on `go-logging` v2.0.0 tag) |
+| [`httputil`](httputil/) | `WriteJSON`, `WriteError`, `HTTPStatus` response helpers | Available |
+| [`httpmw`](httpmw/) | Shared HTTP middleware (`Stack`, request/trace ID, logging, recovery), health handlers, graceful `Server` | Available |
 | [`testutil`](testutil/) | Shared test helpers | Under review |
 | [`audit`](audit/) | Agent audit event schema + pluggable sinks (see ADR-0018 in identity-platform-go) | ✅ Available |
 | [`audit/durable`](audit/durable/) | Postgres-backed at-least-once durable sink (ADR-0019) | ✅ Available |
