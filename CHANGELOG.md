@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- `httpmw.TraceID` now uses the active OpenTelemetry span's trace ID for `X-Trace-ID` and the context (ignoring any inbound header) so the response header matches the access log and the trace backend when `otelhttp` wraps the handler. Without a span the behavior is unchanged.
 - **BREAKING:** HTTP middleware moved from `httputil` to `httpmw` and renamed: `httputil.TraceIDMiddleware` → `httpmw.TraceID`, `httputil.LoggingMiddleware` → `httpmw.Logging`, `httputil.RecoveryMiddleware` → `httpmw.Recovery`, `httputil.Logger` → `httpmw.Logger`. `httputil` now holds only response helpers.
 - **BREAKING:** `httputil.StartMetricsServer`, `MetricsServer`, `DefaultMetricsAddr` and `DefaultMetricsPath` moved to `httpserver` (same names). Prefer `httpmw.Stack(logger)`, which also fixes the empty-`trace_id` logging that results from wiring the three in the wrong order.
 

@@ -22,15 +22,23 @@ func newTraceID() string {
 	return id
 }
 
-// TraceID injects a trace ID into the request context. It reads
-// X-Trace-ID from the inbound request header when the value is a canonical
-// UUID v4; otherwise it generates a fresh one. The selected ID is echoed in
-// the X-Trace-ID response header so downstream consumers and clients see it.
+// TraceID injects a trace ID into the request context and echoes it in the
+// X-Trace-ID response header.
+//
+// When a valid OpenTelemetry span is already on the request context (for
+// example because otelhttp wraps the handler), the span's trace ID is used,
+// so the header a client sees is the same ID the trace backend and the access
+// log carry; any inbound X-Trace-ID is ignored in that case. Otherwise the
+// inbound X-Trace-ID is reused when it is a canonical UUID v4, and a fresh UUID
+// is generated when it is missing or malformed (which prevents log injection).
 func TraceID(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		traceID := r.Header.Get(traceIDHeader)
-		if !uuidPattern.MatchString(traceID) {
-			// Reject missing, malformed, or potentially injected trace IDs.
+		var traceID string
+		if sc := trace.SpanContextFromContext(r.Context()); sc.IsValid() {
+			traceID = sc.TraceID().String()
+		} else if inbound := r.Header.Get(traceIDHeader); uuidPattern.MatchString(inbound) {
+			traceID = inbound
+		} else {
 			traceID = newTraceID()
 		}
 		ctx := logging.WithTraceID(r.Context(), traceID)

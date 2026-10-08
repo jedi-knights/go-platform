@@ -2,9 +2,11 @@ package httpmw_test
 
 import (
 	"net/http"
+	"net/http/httptest"
 	"testing"
 
 	"github.com/jedi-knights/go-logging/pkg/logging"
+	"go.opentelemetry.io/otel/trace"
 
 	"github.com/jedi-knights/go-platform/httpmw"
 )
@@ -76,5 +78,51 @@ func TestTraceID_GeneratedIDsRoundTrip(t *testing.T) {
 			t.Fatalf("duplicate generated trace id %q", id)
 		}
 		seen[id] = struct{}{}
+	}
+}
+
+// With an OTel span active, the X-Trace-ID header must be the span's trace ID:
+// that is the identifier the access log and the trace backend carry, so a
+// client quoting the header can find both.
+func TestTraceID_UsesActiveOTelTraceID(t *testing.T) {
+	t.Parallel()
+	var inCtx string
+	h := httpmw.TraceID(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+		inCtx = logging.TraceIDFromContext(r.Context())
+	}))
+
+	w := serveWithSpan(h)
+
+	if got := w.Header().Get("X-Trace-ID"); got != wantOTelTraceID {
+		t.Errorf("X-Trace-ID = %q, want the OTel trace id %q", got, wantOTelTraceID)
+	}
+	if inCtx != wantOTelTraceID {
+		t.Errorf("context trace id = %q, want %q", inCtx, wantOTelTraceID)
+	}
+}
+
+func TestTraceID_ActiveOTelSpanOverridesInboundHeader(t *testing.T) {
+	t.Parallel()
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.Header.Set("X-Trace-ID", validUUID)
+	req = req.WithContext(trace.ContextWithSpanContext(req.Context(), otelSpanContext()))
+	w := httptest.NewRecorder()
+
+	httpmw.TraceID(ok).ServeHTTP(w, req)
+
+	if got := w.Header().Get("X-Trace-ID"); got != wantOTelTraceID {
+		t.Errorf("X-Trace-ID = %q, want %q (inbound %q must not win over an active span)", got, wantOTelTraceID, validUUID)
+	}
+}
+
+func TestStack_HeaderAndAccessLogAgreeUnderOTel(t *testing.T) {
+	t.Parallel()
+	logger, buf := newBufLogger(t)
+
+	w := serveWithSpan(httpmw.Stack(logger)(ok))
+
+	l := findLog(logLines(t, buf), "request completed")
+	if l == nil || l["trace_id"] != w.Header().Get("X-Trace-ID") {
+		t.Errorf("access log trace_id = %v, X-Trace-ID header = %q; they must match", l["trace_id"], w.Header().Get("X-Trace-ID"))
 	}
 }
