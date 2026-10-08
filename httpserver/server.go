@@ -1,4 +1,4 @@
-package httpmw
+package httpserver
 
 import (
 	"context"
@@ -27,37 +27,37 @@ type Server struct {
 	shutdownTimeout time.Duration
 }
 
-// ServerOption configures [NewServer].
-type ServerOption func(*Server)
+// Option configures [New].
+type Option func(*Server)
 
 // WithReadHeaderTimeout overrides the header read timeout (default 5s).
 // Zero disables it; negative values panic.
-func WithReadHeaderTimeout(d time.Duration) ServerOption {
+func WithReadHeaderTimeout(d time.Duration) Option {
 	return func(s *Server) { s.srv.ReadHeaderTimeout = nonNegative("ReadHeaderTimeout", d) }
 }
 
 // WithReadTimeout overrides the full request read timeout (default 15s).
-func WithReadTimeout(d time.Duration) ServerOption {
+func WithReadTimeout(d time.Duration) Option {
 	return func(s *Server) { s.srv.ReadTimeout = nonNegative("ReadTimeout", d) }
 }
 
 // WithWriteTimeout overrides the response write timeout (default 15s). Raise
 // or zero it for streaming endpoints.
-func WithWriteTimeout(d time.Duration) ServerOption {
+func WithWriteTimeout(d time.Duration) Option {
 	return func(s *Server) { s.srv.WriteTimeout = nonNegative("WriteTimeout", d) }
 }
 
 // WithIdleTimeout overrides the keep-alive idle timeout (default 60s).
-func WithIdleTimeout(d time.Duration) ServerOption {
+func WithIdleTimeout(d time.Duration) Option {
 	return func(s *Server) { s.srv.IdleTimeout = nonNegative("IdleTimeout", d) }
 }
 
 // WithShutdownTimeout overrides how long graceful shutdown waits for in-flight
 // requests (default 30s). It must be positive.
-func WithShutdownTimeout(d time.Duration) ServerOption {
+func WithShutdownTimeout(d time.Duration) Option {
 	return func(s *Server) {
 		if d <= 0 {
-			panic(fmt.Sprintf("httpmw: shutdown timeout must be positive, got %s", d))
+			panic(fmt.Sprintf("httpserver: shutdown timeout must be positive, got %s", d))
 		}
 		s.shutdownTimeout = d
 	}
@@ -65,16 +65,16 @@ func WithShutdownTimeout(d time.Duration) ServerOption {
 
 func nonNegative(name string, d time.Duration) time.Duration {
 	if d < 0 {
-		panic(fmt.Sprintf("httpmw: %s must not be negative, got %s", name, d))
+		panic(fmt.Sprintf("httpserver: %s must not be negative, got %s", name, d))
 	}
 	return d
 }
 
-// NewServer builds a Server for addr serving handler. It panics when handler
+// New builds a Server for addr serving handler. It panics when handler
 // is nil, since a server with no handler would serve 404s forever.
-func NewServer(addr string, handler http.Handler, opts ...ServerOption) *Server {
+func New(addr string, handler http.Handler, opts ...Option) *Server {
 	if handler == nil {
-		panic("httpmw: NewServer requires a non-nil handler")
+		panic("httpserver: New requires a non-nil handler")
 	}
 	s := &Server{
 		srv: &http.Server{
@@ -104,7 +104,7 @@ func (s *Server) HTTPServer() *http.Server { return s.srv }
 func (s *Server) Run(ctx context.Context) error {
 	ln, err := net.Listen("tcp", s.srv.Addr)
 	if err != nil {
-		return fmt.Errorf("httpmw: listen %s: %w", s.srv.Addr, err)
+		return fmt.Errorf("httpserver: listen %s: %w", s.srv.Addr, err)
 	}
 	return s.Serve(ctx, ln)
 }
@@ -125,7 +125,7 @@ func (s *Server) Serve(ctx context.Context, ln net.Listener) error {
 	case err := <-serveErr:
 		// Serve returns only on failure here: ErrServerClosed requires
 		// Shutdown, which has not been called yet.
-		return fmt.Errorf("httpmw: serve: %w", err)
+		return fmt.Errorf("httpserver: serve: %w", err)
 	case <-sigCtx.Done():
 	}
 
@@ -135,7 +135,7 @@ func (s *Server) Serve(ctx context.Context, ln net.Listener) error {
 	defer cancel()
 	if err := s.srv.Shutdown(shutCtx); err != nil {
 		_ = s.srv.Close() // best-effort: release connections after a failed graceful drain
-		return fmt.Errorf("httpmw: shutdown: %w", err)
+		return fmt.Errorf("httpserver: shutdown: %w", err)
 	}
 	<-serveErr // always http.ErrServerClosed after a successful Shutdown; waiting ensures Serve has fully returned
 	return nil

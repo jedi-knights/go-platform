@@ -1,4 +1,4 @@
-package httpmw
+package httpserver
 
 import (
 	"context"
@@ -37,7 +37,7 @@ type ReadyCheck func(ctx context.Context) error
 func ReadyHandler(checks ...ReadyCheck) http.Handler {
 	for i, c := range checks {
 		if c == nil {
-			panic(fmt.Sprintf("httpmw: ReadyHandler check %d is nil", i))
+			panic(fmt.Sprintf("httpserver: ReadyHandler check %d is nil", i))
 		}
 	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

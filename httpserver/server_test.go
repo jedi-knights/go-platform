@@ -1,4 +1,4 @@
-package httpmw_test
+package httpserver_test
 
 import (
 	"bufio"
@@ -9,23 +9,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jedi-knights/go-platform/httpmw"
+	"github.com/jedi-knights/go-platform/httpserver"
 )
 
-const testWait = 5 * time.Second
-
-func listen(t *testing.T) net.Listener {
-	t.Helper()
-	ln, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatal(err)
-	}
-	return ln
-}
-
-func TestNewServer_DefaultTimeouts(t *testing.T) {
+func TestNew_DefaultTimeouts(t *testing.T) {
 	t.Parallel()
-	hs := httpmw.NewServer(":0", ok).HTTPServer()
+	hs := httpserver.New(":0", ok).HTTPServer()
 	if hs.ReadHeaderTimeout != 5*time.Second || hs.ReadTimeout != 15*time.Second ||
 		hs.WriteTimeout != 15*time.Second || hs.IdleTimeout != 60*time.Second {
 		t.Errorf("timeouts = header %s read %s write %s idle %s",
@@ -33,13 +22,13 @@ func TestNewServer_DefaultTimeouts(t *testing.T) {
 	}
 }
 
-func TestNewServer_Options(t *testing.T) {
+func TestNew_Options(t *testing.T) {
 	t.Parallel()
-	hs := httpmw.NewServer(":0", ok,
-		httpmw.WithReadHeaderTimeout(1*time.Second),
-		httpmw.WithReadTimeout(2*time.Second),
-		httpmw.WithWriteTimeout(0),
-		httpmw.WithIdleTimeout(4*time.Second),
+	hs := httpserver.New(":0", ok,
+		httpserver.WithReadHeaderTimeout(1*time.Second),
+		httpserver.WithReadTimeout(2*time.Second),
+		httpserver.WithWriteTimeout(0),
+		httpserver.WithIdleTimeout(4*time.Second),
 	).HTTPServer()
 	if hs.ReadHeaderTimeout != time.Second || hs.ReadTimeout != 2*time.Second ||
 		hs.WriteTimeout != 0 || hs.IdleTimeout != 4*time.Second {
@@ -47,11 +36,11 @@ func TestNewServer_Options(t *testing.T) {
 	}
 }
 
-func TestNewServer_InvalidArgumentsPanic(t *testing.T) {
+func TestNew_InvalidArgumentsPanic(t *testing.T) {
 	t.Parallel()
-	mustPanic(t, "nil handler", func() { httpmw.NewServer(":0", nil) })
-	mustPanic(t, "negative read timeout", func() { httpmw.NewServer(":0", ok, httpmw.WithReadTimeout(-1)) })
-	mustPanic(t, "zero shutdown timeout", func() { httpmw.NewServer(":0", ok, httpmw.WithShutdownTimeout(0)) })
+	mustPanic(t, "nil handler", func() { httpserver.New(":0", nil) })
+	mustPanic(t, "negative read timeout", func() { httpserver.New(":0", ok, httpserver.WithReadTimeout(-1)) })
+	mustPanic(t, "zero shutdown timeout", func() { httpserver.New(":0", ok, httpserver.WithShutdownTimeout(0)) })
 }
 
 func TestServer_ServesThenShutsDownCleanly(t *testing.T) {
@@ -59,7 +48,7 @@ func TestServer_ServesThenShutsDownCleanly(t *testing.T) {
 	ln := listen(t)
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
-	go func() { done <- httpmw.NewServer("", ok).Serve(ctx, ln) }()
+	go func() { done <- httpserver.New("", ok).Serve(ctx, ln) }()
 
 	resp, err := http.Get("http://" + ln.Addr().String())
 	if err != nil {
@@ -92,7 +81,7 @@ func TestServer_ShutdownWaitsForInFlightRequest(t *testing.T) {
 	})
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
-	go func() { done <- httpmw.NewServer("", slow).Serve(ctx, ln) }()
+	go func() { done <- httpserver.New("", slow).Serve(ctx, ln) }()
 
 	respc := make(chan int, 1)
 	go func() {
@@ -134,7 +123,7 @@ func TestServer_ShutdownTimeoutReturnsDeadlineExceeded(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
 	go func() {
-		done <- httpmw.NewServer("", stuck, httpmw.WithShutdownTimeout(50*time.Millisecond)).Serve(ctx, ln)
+		done <- httpserver.New("", stuck, httpserver.WithShutdownTimeout(50*time.Millisecond)).Serve(ctx, ln)
 	}()
 	go func() { _, _ = http.Get("http://" + ln.Addr().String()) }() //nolint:bodyclose // test: request is aborted when the server force-closes
 	<-started
@@ -154,7 +143,7 @@ func TestServer_ServeFailureIsReturned(t *testing.T) {
 	t.Parallel()
 	ln := listen(t)
 	_ = ln.Close() // serving on a closed listener must fail, not hang
-	err := httpmw.NewServer("", ok).Serve(context.Background(), ln)
+	err := httpserver.New("", ok).Serve(context.Background(), ln)
 	if err == nil {
 		t.Fatal("Serve on a closed listener returned nil")
 	}
@@ -164,7 +153,7 @@ func TestServer_RunReportsListenError(t *testing.T) {
 	t.Parallel()
 	busy := listen(t)
 	defer func() { _ = busy.Close() }() // test cleanup; close error is not actionable
-	err := httpmw.NewServer(busy.Addr().String(), ok).Run(context.Background())
+	err := httpserver.New(busy.Addr().String(), ok).Run(context.Background())
 	if err == nil {
 		t.Fatal("Run on an in-use address returned nil")
 	}
@@ -178,7 +167,7 @@ func TestServer_RunServesOnAddressAndStopsOnCancel(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
-	go func() { done <- httpmw.NewServer(addr, ok).Run(ctx) }()
+	go func() { done <- httpserver.New(addr, ok).Run(ctx) }()
 
 	var resp *http.Response
 	var err error
@@ -209,7 +198,7 @@ func TestServer_ReadHeaderTimeoutDropsSilentClients(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	go func() {
-		_ = httpmw.NewServer("", ok, httpmw.WithReadHeaderTimeout(100*time.Millisecond)).Serve(ctx, ln)
+		_ = httpserver.New("", ok, httpserver.WithReadHeaderTimeout(100*time.Millisecond)).Serve(ctx, ln)
 	}()
 
 	conn, err := net.Dial("tcp", ln.Addr().String())
@@ -234,7 +223,7 @@ func TestServer_WriteTimeoutAbortsSlowHandlers(t *testing.T) {
 	})
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	go func() { _ = httpmw.NewServer("", slow, httpmw.WithWriteTimeout(50*time.Millisecond)).Serve(ctx, ln) }()
+	go func() { _ = httpserver.New("", slow, httpserver.WithWriteTimeout(50*time.Millisecond)).Serve(ctx, ln) }()
 
 	resp, err := http.Get("http://" + ln.Addr().String())
 	if err == nil {

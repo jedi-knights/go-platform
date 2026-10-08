@@ -9,11 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- `httpmw` package (ADR-0001, Tier 1): `Stack` (RequestID → TraceID → Recovery → Logging in the one correct order, with `WithSkipLogPaths`), `RequestID`, `HealthHandler`, `ReadyHandler`, and `NewServer`/`Run`/`Serve` with standard timeouts and graceful shutdown.
+- `httpmw` package (ADR-0001, Tier 1): `Stack` (RequestID → TraceID → Recovery → Logging in the one correct order, with `WithSkipLogPaths`) and `RequestID`.
+- `httpserver` package: `New`/`Run`/`Serve` with standard timeouts and graceful shutdown on SIGINT/SIGTERM, `HealthHandler`, `ReadyHandler`, and `StartMetricsServer`. `MetricsServer.Server.Addr` now reports the address actually bound.
 
 ### Changed
 
-- **BREAKING:** HTTP middleware moved from `httputil` to `httpmw` and renamed: `httputil.TraceIDMiddleware` → `httpmw.TraceID`, `httputil.LoggingMiddleware` → `httpmw.Logging`, `httputil.RecoveryMiddleware` → `httpmw.Recovery`, `httputil.Logger` → `httpmw.Logger`. `httputil` now holds only response helpers. Prefer `httpmw.Stack(logger)`, which also fixes the empty-`trace_id` logging that results from wiring the three in the wrong order.
+- **BREAKING:** HTTP middleware moved from `httputil` to `httpmw` and renamed: `httputil.TraceIDMiddleware` → `httpmw.TraceID`, `httputil.LoggingMiddleware` → `httpmw.Logging`, `httputil.RecoveryMiddleware` → `httpmw.Recovery`, `httputil.Logger` → `httpmw.Logger`. `httputil` now holds only response helpers.
+- **BREAKING:** `httputil.StartMetricsServer`, `MetricsServer`, `DefaultMetricsAddr` and `DefaultMetricsPath` moved to `httpserver` (same names). Prefer `httpmw.Stack(logger)`, which also fixes the empty-`trace_id` logging that results from wiring the three in the wrong order.
 
 ### Added (earlier)
 

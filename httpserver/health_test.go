@@ -1,4 +1,4 @@
-package httpmw_test
+package httpserver_test
 
 import (
 	"context"
@@ -9,12 +9,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jedi-knights/go-platform/httpmw"
+	"github.com/jedi-knights/go-platform/httpserver"
 )
 
 func TestHealthHandler(t *testing.T) {
 	t.Parallel()
-	w := serve(httpmw.HealthHandler(), "/health", nil)
+	w := serve(httpserver.HealthHandler(), "/health")
 	if w.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200", w.Code)
 	}
@@ -33,18 +33,18 @@ func TestReadyHandler(t *testing.T) {
 
 	tests := []struct {
 		name     string
-		checks   []httpmw.ReadyCheck
+		checks   []httpserver.ReadyCheck
 		wantCode int
 		wantBody string
 	}{
 		{"no checks is ready", nil, http.StatusOK, `{"status":"ok"}`},
-		{"all pass", []httpmw.ReadyCheck{pass, pass}, http.StatusOK, `{"status":"ok"}`},
-		{"one fails", []httpmw.ReadyCheck{pass, fail}, http.StatusServiceUnavailable, `{"status":"unavailable"}`},
+		{"all pass", []httpserver.ReadyCheck{pass, pass}, http.StatusOK, `{"status":"ok"}`},
+		{"one fails", []httpserver.ReadyCheck{pass, fail}, http.StatusServiceUnavailable, `{"status":"unavailable"}`},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			w := serve(httpmw.ReadyHandler(tt.checks...), "/ready", nil)
+			w := serve(httpserver.ReadyHandler(tt.checks...), "/ready")
 			if w.Code != tt.wantCode {
 				t.Errorf("status = %d, want %d", w.Code, tt.wantCode)
 			}
@@ -61,11 +61,11 @@ func TestReadyHandler(t *testing.T) {
 func TestReadyHandler_StopsAtFirstFailure(t *testing.T) {
 	t.Parallel()
 	called := false
-	h := httpmw.ReadyHandler(
+	h := httpserver.ReadyHandler(
 		func(context.Context) error { return errors.New("down") },
 		func(context.Context) error { called = true; return nil },
 	)
-	serve(h, "/ready", nil)
+	serve(h, "/ready")
 	if called {
 		t.Error("checks after the first failure should not run")
 	}
@@ -75,11 +75,11 @@ func TestReadyHandler_ChecksReceiveBoundedContext(t *testing.T) {
 	t.Parallel()
 	var deadline time.Time
 	var has bool
-	h := httpmw.ReadyHandler(func(ctx context.Context) error {
+	h := httpserver.ReadyHandler(func(ctx context.Context) error {
 		deadline, has = ctx.Deadline()
 		return nil
 	})
-	serve(h, "/ready", nil)
+	serve(h, "/ready")
 	if !has {
 		t.Fatal("check context has no deadline")
 	}
@@ -90,19 +90,19 @@ func TestReadyHandler_ChecksReceiveBoundedContext(t *testing.T) {
 
 func TestReadyHandler_NilCheckPanics(t *testing.T) {
 	t.Parallel()
-	mustPanic(t, "nil check", func() { httpmw.ReadyHandler(nil) })
+	mustPanic(t, "nil check", func() { httpserver.ReadyHandler(nil) })
 }
 
 // A check that never returns on its own must be cut off by the readiness
 // deadline, and the probe must see "unavailable" rather than hang.
 func TestReadyHandler_HungCheckIsCutOff(t *testing.T) {
 	t.Parallel()
-	h := httpmw.ReadyHandler(func(ctx context.Context) error {
+	h := httpserver.ReadyHandler(func(ctx context.Context) error {
 		<-ctx.Done()
 		return ctx.Err()
 	})
 	start := time.Now()
-	w := serve(h, "/ready", nil)
+	w := serve(h, "/ready")
 	if w.Code != http.StatusServiceUnavailable {
 		t.Errorf("status = %d, want 503", w.Code)
 	}
@@ -116,7 +116,7 @@ func TestReadyHandler_ClientDisconnectCancelsChecks(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	var sawCancel bool
-	h := httpmw.ReadyHandler(func(c context.Context) error {
+	h := httpserver.ReadyHandler(func(c context.Context) error {
 		sawCancel = c.Err() != nil
 		return c.Err()
 	})

@@ -1,11 +1,12 @@
-// Package httpmw provides the HTTP middleware, health handlers, and server
-// lifecycle shared by every jedi-knights Go service. See ADR-0001 in
-// jedi-knights/architecture (docs/adr/0001-shared-http-middleware.md).
+// Package httpmw provides the HTTP middleware shared by every jedi-knights Go
+// service. See ADR-0001 in jedi-knights/architecture
+// (docs/adr/0001-shared-http-middleware.md).
 //
-// All shared HTTP middleware lives here; [httputil] holds only response
-// helpers ([httputil.WriteJSON], [httputil.WriteError]).
+// All shared HTTP middleware lives here. Response helpers live in
+// [github.com/jedi-knights/go-platform/httputil]; server lifecycle and health
+// handlers live in [github.com/jedi-knights/go-platform/httpserver].
 //
-// # Tier 1 surface
+// # Surface
 //
 //   - [Stack] — composes RequestID → TraceID → Recovery → Logging in the one
 //     correct order. Prefer it to wiring the pieces by hand: the ordering is
@@ -18,15 +19,12 @@
 //     status, duration_ms, trace_id, request_id, remote_ip, user_agent.
 //   - [Recovery] — recovers handler panics, logs them, and writes a 500 only
 //     when no response has been committed yet.
-//   - [HealthHandler] / [ReadyHandler] — liveness and readiness endpoints.
-//   - [NewServer] — an [http.Server] with the platform's standard timeouts,
-//     SIGINT/SIGTERM handling, and graceful shutdown.
 //
 // # Usage
 //
 //	handler := httpmw.Stack(logger)(mux)
 //	handler = otelhttp.NewHandler(handler, "my-service") // optional, per service
-//	srv := httpmw.NewServer(":8080", handler)
+//	srv := httpserver.New(":8080", handler)
 //	if err := srv.Run(ctx); err != nil { ... }
 //
 // # Why ordering matters

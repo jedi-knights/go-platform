@@ -9,7 +9,8 @@ A single Go module holding shared utility packages for `jedi-knights` services. 
 | `apperrors` | Structured `AppError` with `ErrorCode` and HTTP status mapping |
 | `jwtutil` | Canonical `Claims`, `Sign`, `Parse` for HS256 JWTs |
 | `httputil` | `WriteJSON`, `WriteError`, `HTTPStatus` — response helpers only |
-| `httpmw` | All shared HTTP middleware (`Stack`, `RequestID`, `TraceID`, `Logging`, `Recovery`), `HealthHandler`/`ReadyHandler`, `NewServer`. See ADR-0001 in `jedi-knights/architecture` |
+| `httpmw` | All shared HTTP middleware: `Stack`, `RequestID`, `TraceID`, `Logging`, `Recovery`. See ADR-0001 in `jedi-knights/architecture` |
+| `httpserver` | Server lifecycle: `New`/`Run`/`Serve`, `HealthHandler`/`ReadyHandler`, `StartMetricsServer` |
 | `testutil` | Shared test helpers (under review — may be skipped if `go-logging` covers the use case) |
 
 Each package corresponds to a former `libs/<name>` directory in `ocrosby/identity-platform-go`.
@@ -25,7 +26,7 @@ Each package corresponds to a former `libs/<name>` directory in `ocrosby/identit
 - **Commit messages**: Conventional Commits with optional scope. Scope is the package name: `feat(apperrors)`, `fix(jwtutil)`, etc. Breaking changes use `!`.
 - **Tests**: external test package (`package foo_test`) so we exercise the public surface. Use `t.Parallel()` everywhere except where the test mutates package-level state.
 - **No new external dependencies** without a clear reason. Prefer stdlib where it suffices.
-- **Each package is independently usable**: do not introduce cross-package dependencies inside the module unless absolutely necessary (e.g., `httputil` importing `apperrors` for the structured error type, or `httpmw` importing `httputil` for `WriteJSON` — both justified). Middleware belongs in `httpmw`, never `httputil`.
+- **Each package is independently usable**: do not introduce cross-package dependencies inside the module unless absolutely necessary (e.g., `httputil` importing `apperrors` for the structured error type, or `httpserver` importing `httputil` for `WriteJSON` — both justified). Middleware belongs in `httpmw`, server lifecycle in `httpserver`, never `httputil`.
 
 ## Versioning
 

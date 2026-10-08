@@ -1,4 +1,4 @@
-package httputil
+package httpserver
 
 import (
 	"context"
@@ -25,9 +25,10 @@ const DefaultMetricsPath = "/metrics"
 // Prometheus sees a clean socket close during a rolling restart
 // instead of a connection reset.
 type MetricsServer struct {
-	// Server is the underlying http.Server. Exposed for callers that
-	// need to tune TLS or custom listeners; normal usage never
-	// touches it.
+	// Server is the underlying http.Server. Its Addr is the address
+	// actually bound, so a ":0" request can be resolved to a port.
+	// Exposed for callers that need to tune TLS or custom listeners;
+	// normal usage never touches it.
 	Server *http.Server
 
 	// Shutdown stops the metrics server. Safe to call more than once.
@@ -47,7 +48,7 @@ type MetricsServer struct {
 // the http.Handler returned by otel.Observability.PromHandler.
 func StartMetricsServer(addr, path string, handler http.Handler) (*MetricsServer, error) {
 	if handler == nil {
-		return nil, errors.New("httputil.StartMetricsServer: handler must not be nil")
+		return nil, errors.New("httpserver.StartMetricsServer: handler must not be nil")
 	}
 	if addr == "" {
 		addr = DefaultMetricsAddr
@@ -58,7 +59,7 @@ func StartMetricsServer(addr, path string, handler http.Handler) (*MetricsServer
 
 	ln, err := net.Listen("tcp", addr)
 	if err != nil {
-		return nil, fmt.Errorf("httputil.StartMetricsServer: listen %s: %w", addr, err)
+		return nil, fmt.Errorf("httpserver.StartMetricsServer: listen %s: %w", addr, err)
 	}
 
 	mux := http.NewServeMux()
@@ -66,19 +67,20 @@ func StartMetricsServer(addr, path string, handler http.Handler) (*MetricsServer
 
 	// Metrics scrapes are short and cheap; keep timeouts tight so a
 	// stuck client cannot pin a goroutine.
-	srv := &http.Server{
-		Handler:           mux,
-		ReadHeaderTimeout: 5 * time.Second,
-		ReadTimeout:       10 * time.Second,
-		WriteTimeout:      10 * time.Second,
-		IdleTimeout:       30 * time.Second,
-	}
+	srv := New(ln.Addr().String(), mux,
+		WithReadHeaderTimeout(5*time.Second),
+		WithReadTimeout(10*time.Second),
+		WithWriteTimeout(10*time.Second),
+		WithIdleTimeout(30*time.Second),
+	).HTTPServer()
 
 	go func() {
 		// http.ErrServerClosed is the expected signal that Shutdown
 		// was called cleanly; anything else is a startup defect worth
 		// surfacing — but we have no logger handle here, so callers
 		// that need log on error wrap StartMetricsServer themselves.
+		// Signal handling is deliberately absent: the caller owns the
+		// shutdown order and calls MetricsServer.Shutdown itself.
 		_ = srv.Serve(ln)
 	}()
 
