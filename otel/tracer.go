@@ -3,6 +3,7 @@ package otel
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 	"time"
@@ -19,6 +20,13 @@ import (
 	semconv "go.opentelemetry.io/otel/semconv/v1.27.0"
 	"go.opentelemetry.io/otel/trace"
 )
+
+// defaultLogOutput returns the destination for the shared slog logger
+// when [Config.LogOutput] is unset. Lifted into a helper so tests can
+// shadow it via a wrapper and so the choice (stdout, not stderr) is
+// explicit — Fly's log collector captures stdout, which is where
+// structured logs want to land.
+func defaultLogOutput() io.Writer { return os.Stdout }
 
 // InstrumentationName is the well-known Tracer name every consumer of
 // this package uses. Per OpenTelemetry conventions, the instrumentation
@@ -71,6 +79,27 @@ type Config struct {
 	// (service.name, service.version, deployment.environment.name).
 	// Use this for region, instance id, or any other static label.
 	ExtraResourceAttrs []attribute.KeyValue
+
+	// LogLevel sets the shared slog logger threshold ("debug" |
+	// "info" | "warn" | "error"). Empty defaults to "info". Only
+	// consulted by [New]; the standalone [Init] (tracer-only) ignores
+	// log fields.
+	LogLevel string
+
+	// LogFormat is "json" (default) or "text". JSON is the fleet
+	// default so downstream log collectors can parse records as
+	// structured events.
+	LogFormat string
+
+	// LogOutput is the destination writer for the shared logger.
+	// Defaults to os.Stdout — Fly captures stdout for its log
+	// collector, which is where structured logs want to land.
+	LogOutput io.Writer
+
+	// LogStaticFields are attached to every log record. Use for
+	// deployment-static labels (region, build SHA) that are not
+	// already covered by ServiceName / ServiceVersion / Environment.
+	LogStaticFields map[string]any
 }
 
 // Shutdown flushes buffered spans and tears down the TracerProvider.
@@ -84,6 +113,10 @@ type Shutdown func(context.Context) error
 // The propagator is set to the W3C TraceContext + Baggage composite, so
 // every consumer can pull / push trace context across HTTP and gRPC
 // without further configuration.
+//
+// Deprecated: new callers should use [New], which wires all three
+// signals (metrics, logs, traces) from one call. Init remains for
+// callers that only need distributed tracing.
 func Init(ctx context.Context, cfg Config) (Shutdown, error) {
 	serviceName := firstNonEmpty(cfg.ServiceName,
 		os.Getenv("OTEL_SERVICE_NAME"))
@@ -94,14 +127,28 @@ func Init(ctx context.Context, cfg Config) (Shutdown, error) {
 	if err != nil {
 		return nil, fmt.Errorf("otel.Init: building resource: %w", err)
 	}
+	tp, shutdown, err := initTracerProvider(ctx, cfg, res)
+	if err != nil {
+		return nil, fmt.Errorf("otel.Init: %w", err)
+	}
+	// Silence the unused assignment — tp is returned via shutdown's
+	// closure. Keeping the explicit binding here documents the shape.
+	_ = tp
+	return shutdown, nil
+}
 
+// initTracerProvider builds the TracerProvider from a pre-constructed
+// resource, installs it globally, wires the W3C TraceContext+Baggage
+// propagator, and returns the provider plus a shutdown func.
+//
+// Shared with [New] so trace, meter, and log signals all carry the
+// same resource attributes without rebuilding them.
+func initTracerProvider(ctx context.Context, cfg Config, res *resource.Resource) (*sdktrace.TracerProvider, Shutdown, error) {
 	exporter, err := buildExporter(ctx, cfg)
 	if err != nil {
-		return nil, fmt.Errorf("otel.Init: building exporter: %w", err)
+		return nil, nil, fmt.Errorf("building exporter: %w", err)
 	}
-
 	sampler := buildSampler(cfg.SamplerRatio)
-
 	tp := sdktrace.NewTracerProvider(
 		sdktrace.WithBatcher(exporter,
 			sdktrace.WithBatchTimeout(5*time.Second)),
@@ -113,8 +160,7 @@ func Init(ctx context.Context, cfg Config) (Shutdown, error) {
 		propagation.TraceContext{},
 		propagation.Baggage{},
 	))
-
-	return tp.Shutdown, nil
+	return tp, tp.Shutdown, nil
 }
 
 // Tracer returns the package's well-known Tracer from the global
