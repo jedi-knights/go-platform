@@ -12,9 +12,11 @@
 //     correct order. Prefer it to wiring the pieces by hand: the ordering is
 //     the thing services repeatedly got wrong.
 //   - [RequestID] — sets X-Request-ID and the context request ID.
-//   - [TraceID] — injects a UUID v4 trace ID into the context via
-//     [logging.WithTraceID] and echoes it in X-Trace-ID. Invalid or missing
-//     inbound IDs are replaced, preventing log injection.
+//   - [TraceID] — injects a trace ID into the context via
+//     [logging.WithTraceID] and echoes it in X-Trace-ID. An active OpenTelemetry
+//     span's trace ID wins, so the header, the access log, and the trace backend
+//     agree; otherwise a valid inbound UUID v4 is reused and invalid or missing
+//     ones are replaced, preventing log injection.
 //   - [Logging] — one structured access-log line per request: method, path,
 //     status, duration_ms, trace_id, request_id, remote_ip, user_agent.
 //   - [Recovery] — recovers handler panics, logs them, and writes a 500 only
