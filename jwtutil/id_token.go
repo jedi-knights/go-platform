@@ -59,6 +59,16 @@ type IDClaims struct {
 	// having to introspect the access token separately. Empty omits the
 	// claim (per identity-platform-go Epic 7 / E7-S3c).
 	ActiveAccountID string `json:"active_account_id,omitempty"`
+
+	// PlanIDs carries the identity-platform plan ids active on the
+	// user's currently-selected account (identity-platform-go Epic 8 /
+	// E8-S4). OIDC relying parties mirror this into their local users
+	// table so plan-gated UI decisions can be made from a local lookup
+	// instead of a fresh entitlements-service round trip per request.
+	// Nil / empty slice omits the claim entirely rather than emitting
+	// an empty JSON array — a plan-less account and an un-wired
+	// entitlements fetcher must be indistinguishable on the wire.
+	PlanIDs []string `json:"plan_ids,omitempty"`
 }
 
 // SignIDToken signs OIDC ID-token claims with RSASSA-PKCS1-v1_5 + SHA-256
