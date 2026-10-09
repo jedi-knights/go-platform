@@ -101,6 +101,53 @@ func TestSignIDToken_ActiveAccountID(t *testing.T) {
 	}
 }
 
+// TestSignIDToken_PlanIDs covers the identity-platform-go E8-S4 claim:
+// relying parties read plan_ids from the ID token so plan-gated UI
+// decisions resolve from the local users-table mirror instead of a
+// fresh entitlements-service round trip per request.
+func TestSignIDToken_PlanIDs(t *testing.T) {
+	t.Parallel()
+	priv := newIDTokenKey(t)
+	now := time.Now().Truncate(time.Second)
+	claims := makeIDClaims(now, "touchline")
+	claims.PlanIDs = []string{"plan-touchline-free", "plan-add-on-live-feed"}
+
+	raw, err := jwtutil.SignIDToken(claims, priv, "kid-1")
+	if err != nil {
+		t.Fatalf("SignIDToken: %v", err)
+	}
+	got, err := jwtutil.ParseIDToken(context.Background(), raw, idKeySource(t, "kid-1", &priv.PublicKey), "touchline")
+	if err != nil {
+		t.Fatalf("ParseIDToken: %v", err)
+	}
+	if len(got.PlanIDs) != 2 || got.PlanIDs[0] != "plan-touchline-free" || got.PlanIDs[1] != "plan-add-on-live-feed" {
+		t.Errorf("PlanIDs: got %v, want [plan-touchline-free plan-add-on-live-feed]", got.PlanIDs)
+	}
+}
+
+// TestSignIDToken_OmitsPlanIDsWhenEmpty guards the omitempty contract.
+// A plan-less account and an un-wired entitlements fetcher must both
+// render as absent on the wire — distinguishable from an explicit
+// empty array only by the field's presence.
+func TestSignIDToken_OmitsPlanIDsWhenEmpty(t *testing.T) {
+	t.Parallel()
+	priv := newIDTokenKey(t)
+	claims := makeIDClaims(time.Now(), "touchline")
+	// PlanIDs left at nil; omitempty must drop the field.
+
+	raw, err := jwtutil.SignIDToken(claims, priv, "kid-1")
+	if err != nil {
+		t.Fatalf("SignIDToken: %v", err)
+	}
+	parsed, _, err := new(jwt.Parser).ParseUnverified(raw, jwt.MapClaims{})
+	if err != nil {
+		t.Fatalf("ParseUnverified: %v", err)
+	}
+	if _, present := parsed.Claims.(jwt.MapClaims)["plan_ids"]; present {
+		t.Errorf("plan_ids must be omitted when empty; got present in %v", parsed.Claims)
+	}
+}
+
 // TestSignIDToken_OmitsActiveAccountIDWhenEmpty guards the omitempty
 // contract — pre-E7-S3c consumers must still see the claim absent from
 // the serialized token when the issuer did not populate it.
