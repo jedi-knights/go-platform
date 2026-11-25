@@ -1,7 +1,9 @@
 package jwtutil_test
 
 import (
+	"encoding/json"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -615,6 +617,126 @@ func TestRoundTrip_ActiveAccountID(t *testing.T) {
 	}
 	if got.ActiveAccountID != "acc-abc" {
 		t.Errorf("ActiveAccountID: got %q, want acc-abc", got.ActiveAccountID)
+	}
+}
+
+// --- AdditionalFields: marshal-side extension for RFC 7519 §4.2 private claims ---
+
+// AdditionalFields lets a token issuer emit namespaced custom claims
+// (e.g. "https://example.app/plan_scope") without widening ClaimsConfig
+// for every downstream resource server. It is write-only — parsers that
+// want to consume the claim decode the JWT payload directly rather than
+// through a sibling Unmarshal (cutline's authmw is the first consumer).
+
+func TestNewClaims_AdditionalFields_MarshalsAtTopLevel(t *testing.T) {
+	t.Parallel()
+	cfg := jwtutil.ClaimsConfig{
+		Subject: "sub",
+		AdditionalFields: map[string]json.RawMessage{
+			"https://thecutline.app/plan_scope": json.RawMessage(`{"tier":"pro"}`),
+		},
+	}
+	body, err := json.Marshal(jwtutil.NewClaims(cfg))
+	if err != nil {
+		t.Fatalf("Marshal: %v", err)
+	}
+	var all map[string]json.RawMessage
+	if err := json.Unmarshal(body, &all); err != nil {
+		t.Fatalf("Unmarshal body: %v (body=%s)", err, body)
+	}
+	raw, ok := all["https://thecutline.app/plan_scope"]
+	if !ok {
+		t.Fatalf("plan_scope claim missing; body = %s", body)
+	}
+	var ps struct {
+		Tier string `json:"tier"`
+	}
+	if err := json.Unmarshal(raw, &ps); err != nil {
+		t.Fatalf("unmarshal plan_scope: %v", err)
+	}
+	if ps.Tier != "pro" {
+		t.Errorf("tier = %q, want pro", ps.Tier)
+	}
+}
+
+// Modeled fields always win — AdditionalFields is additive. A caller
+// that passes an AdditionalField named "sub" cannot spoof the modeled
+// Subject.
+func TestNewClaims_AdditionalFields_DoesNotOverrideModeledFields(t *testing.T) {
+	t.Parallel()
+	cfg := jwtutil.ClaimsConfig{
+		Subject: "real-sub",
+		AdditionalFields: map[string]json.RawMessage{
+			"sub": json.RawMessage(`"spoofed"`),
+		},
+	}
+	body, err := json.Marshal(jwtutil.NewClaims(cfg))
+	if err != nil {
+		t.Fatalf("Marshal: %v", err)
+	}
+	var all map[string]json.RawMessage
+	if err := json.Unmarshal(body, &all); err != nil {
+		t.Fatalf("Unmarshal body: %v", err)
+	}
+	if string(all["sub"]) != `"real-sub"` {
+		t.Errorf("sub = %s, want %q", all["sub"], `"real-sub"`)
+	}
+}
+
+// A nil / empty AdditionalFields map produces a token byte-identical to
+// pre-AdditionalFields callers — critical for wire-compat with every
+// existing resource server that parses issued tokens.
+func TestNewClaims_AdditionalFields_NilIsWireCompatible(t *testing.T) {
+	t.Parallel()
+	cfg := jwtutil.ClaimsConfig{Subject: "s", IssuedAt: time.Unix(0, 0), ExpiresAt: time.Unix(0, 0)}
+	withNil, err := json.Marshal(jwtutil.NewClaims(cfg))
+	if err != nil {
+		t.Fatalf("Marshal(nil AF): %v", err)
+	}
+	cfg.AdditionalFields = map[string]json.RawMessage{} // empty, not nil
+	withEmpty, err := json.Marshal(jwtutil.NewClaims(cfg))
+	if err != nil {
+		t.Fatalf("Marshal(empty AF): %v", err)
+	}
+	if string(withNil) != string(withEmpty) {
+		t.Errorf("empty map should round-trip identical to nil:\nnil=%s\nempty=%s", withNil, withEmpty)
+	}
+}
+
+// Signing must succeed with AdditionalFields populated — the JWT library
+// marshals Claims via its own code path, so the MarshalJSON override is
+// what carries the field into the signed body.
+func TestSign_AdditionalFields_RidesThroughSignature(t *testing.T) {
+	t.Parallel()
+	now := time.Now().Truncate(time.Second)
+	claims := jwtutil.NewClaims(jwtutil.ClaimsConfig{
+		Issuer:    "iss",
+		Subject:   "sub",
+		TokenID:   "jti",
+		Scope:     "tier:pro",
+		IssuedAt:  now,
+		ExpiresAt: now.Add(time.Hour),
+		AdditionalFields: map[string]json.RawMessage{
+			"https://thecutline.app/plan_scope": json.RawMessage(`{"tier":"pro","sports":["soccer-women"]}`),
+		},
+	})
+	raw := signedToken(t, claims)
+	// Decode the payload segment and look for the namespaced key —
+	// cutline's authmw uses the same pattern.
+	parts := strings.Split(raw, ".")
+	if len(parts) != 3 {
+		t.Fatalf("JWT has %d segments, want 3", len(parts))
+	}
+	payload, err := jwt.NewParser().DecodeSegment(parts[1])
+	if err != nil {
+		t.Fatalf("decode payload: %v", err)
+	}
+	var all map[string]json.RawMessage
+	if err := json.Unmarshal(payload, &all); err != nil {
+		t.Fatalf("unmarshal payload: %v", err)
+	}
+	if _, ok := all["https://thecutline.app/plan_scope"]; !ok {
+		t.Errorf("plan_scope claim absent from signed payload: %s", payload)
 	}
 }
 
