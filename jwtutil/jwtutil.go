@@ -105,6 +105,51 @@ type Claims struct {
 	// so a resource server that expects a specific field order or
 	// numeric precision can rely on it. Empty / nil omits the claim.
 	AuthorizationDetails []json.RawMessage `json:"authorization_details,omitempty"`
+
+	// AdditionalFields carries arbitrary extra claims not modeled by
+	// the fields above. Keys that collide with a modeled field's JSON
+	// name lose to the modeled field — AdditionalFields is additive
+	// only, so a caller cannot spoof sub, aud, exp, etc. by passing
+	// them here.
+	//
+	// Use for RFC 7519 §4.2 private claim names — URI-prefixed keys
+	// such as "https://thecutline.app/plan_scope" that resource
+	// servers need but jwtutil does not natively model. This is
+	// marshal-only; parsers that need to read the claim decode the
+	// payload segment directly rather than through a sibling
+	// Unmarshal (which would need to enumerate every modeled key to
+	// distinguish them from additions).
+	AdditionalFields map[string]json.RawMessage `json:"-"`
+}
+
+// claimsMarshalAlias is Claims without the MarshalJSON method — used
+// inside MarshalJSON to serialize the modeled fields via the default
+// encoder without recursing.
+type claimsMarshalAlias Claims
+
+// MarshalJSON emits the modeled fields first, then merges
+// AdditionalFields at the top level. Modeled keys always win: a
+// caller cannot override sub/aud/exp by passing them through
+// AdditionalFields.
+func (c Claims) MarshalJSON() ([]byte, error) {
+	base, err := json.Marshal(claimsMarshalAlias(c))
+	if err != nil {
+		return nil, err
+	}
+	if len(c.AdditionalFields) == 0 {
+		return base, nil
+	}
+	var merged map[string]json.RawMessage
+	if err := json.Unmarshal(base, &merged); err != nil {
+		return nil, fmt.Errorf("re-unmarshal modeled claims: %w", err)
+	}
+	for k, v := range c.AdditionalFields {
+		if _, taken := merged[k]; taken {
+			continue
+		}
+		merged[k] = v
+	}
+	return json.Marshal(merged)
 }
 
 // Actor is one level of the RFC 8693 §4.1 actor chain.
@@ -178,6 +223,12 @@ type ClaimsConfig struct {
 	// authorization_details (or where the caller did not request it)
 	// leaves this nil. Identity-platform-go ADR-0017 wires this in.
 	AuthorizationDetails []json.RawMessage
+
+	// AdditionalFields carries arbitrary extra claims (RFC 7519 §4.2
+	// private claim names) that jwtutil does not natively model.
+	// Modeled fields always win on key collision — see Claims for the
+	// full semantics. Nil / empty is wire-identical to omission.
+	AdditionalFields map[string]json.RawMessage
 }
 
 // NewClaims constructs a Claims value from cfg, avoiding direct dependency on
@@ -189,6 +240,16 @@ func NewClaims(cfg ClaimsConfig) *Claims {
 	var audience jwt.ClaimStrings
 	if len(cfg.Audience) > 0 {
 		audience = append(jwt.ClaimStrings(nil), cfg.Audience...)
+	}
+	// Defensive copy of AdditionalFields: callers may mutate their map
+	// after NewClaims returns, and each json.RawMessage is a byte slice
+	// so we copy the bytes too.
+	var additional map[string]json.RawMessage
+	if len(cfg.AdditionalFields) > 0 {
+		additional = make(map[string]json.RawMessage, len(cfg.AdditionalFields))
+		for k, v := range cfg.AdditionalFields {
+			additional[k] = append(json.RawMessage(nil), v...)
+		}
 	}
 	return &Claims{
 		RegisteredClaims: jwt.RegisteredClaims{
@@ -208,6 +269,7 @@ func NewClaims(cfg ClaimsConfig) *Claims {
 		ActiveAccountID:      cfg.ActiveAccountID,
 		Act:                  cfg.Act,
 		AuthorizationDetails: append([]json.RawMessage(nil), cfg.AuthorizationDetails...),
+		AdditionalFields:     additional,
 	}
 }
 
