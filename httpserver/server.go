@@ -2,6 +2,7 @@ package httpserver
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -137,6 +138,12 @@ func (s *Server) Serve(ctx context.Context, ln net.Listener) error {
 		_ = s.srv.Close() // best-effort: release connections after a failed graceful drain
 		return fmt.Errorf("httpserver: shutdown: %w", err)
 	}
-	<-serveErr // always http.ErrServerClosed after a successful Shutdown; waiting ensures Serve has fully returned
+	// Shutdown succeeded — Serve must now be returning http.ErrServerClosed.
+	// Waiting ensures Serve has fully exited before we signal done, and
+	// asserting the expected error surfaces a real bug (something other
+	// than ErrServerClosed from Serve) instead of swallowing it silently.
+	if err := <-serveErr; !errors.Is(err, http.ErrServerClosed) {
+		return fmt.Errorf("httpserver: unexpected serve error after shutdown: %w", err)
+	}
 	return nil
 }
